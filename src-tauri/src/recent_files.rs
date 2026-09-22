@@ -1,0 +1,140 @@
+use serde::{Deserialize, Serialize};
+
+pub const RECENT_CAP: usize = 20;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RecentEntry {
+    pub path: String,
+    pub name: String,
+    pub opened_at: u64,
+    pub pinned: bool,
+}
+
+pub fn upsert_and_trim(
+    entries: Vec<RecentEntry>,
+    path: &str,
+    name: &str,
+    opened_at: u64,
+    cap: usize,
+) -> Vec<RecentEntry> {
+    let mut without_target: Vec<RecentEntry> =
+        entries.into_iter().filter(|e| e.path != path).collect();
+
+    without_target.push(RecentEntry {
+        path: path.to_string(),
+        name: name.to_string(),
+        opened_at,
+        pinned: false,
+    });
+
+    let (mut pinned, mut unpinned): (Vec<_>, Vec<_>) =
+        without_target.into_iter().partition(|e| e.pinned);
+
+    unpinned.sort_by(|a, b| b.opened_at.cmp(&a.opened_at));
+    unpinned.truncate(cap);
+    pinned.sort_by(|a, b| b.opened_at.cmp(&a.opened_at));
+
+    // Newly-opened file goes first among non-pinned, unless it was already
+    // pinned (in which case it stays in the pinned group, updated above).
+    let mut result: Vec<RecentEntry> = Vec::new();
+    result.extend(unpinned);
+    result.extend(pinned);
+    result.sort_by(|a, b| b.opened_at.cmp(&a.opened_at));
+    result
+}
+
+pub fn toggle_pin(entries: Vec<RecentEntry>, path: &str) -> Vec<RecentEntry> {
+    entries
+        .into_iter()
+        .map(|mut e| {
+            if e.path == path {
+                e.pinned = !e.pinned;
+            }
+            e
+        })
+        .collect()
+}
+
+pub fn remove_entry(entries: Vec<RecentEntry>, path: &str) -> Vec<RecentEntry> {
+    entries.into_iter().filter(|e| e.path != path).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(path: &str, opened_at: u64, pinned: bool) -> RecentEntry {
+        RecentEntry {
+            path: path.to_string(),
+            name: path.to_string(),
+            opened_at,
+            pinned,
+        }
+    }
+
+    #[test]
+    fn upsert_adds_new_entry_to_front() {
+        let entries = vec![entry("a.pdf", 100, false)];
+        let result = upsert_and_trim(entries, "b.pdf", "b.pdf", 200, 20);
+        assert_eq!(result[0].path, "b.pdf");
+        assert_eq!(result[1].path, "a.pdf");
+    }
+
+    #[test]
+    fn upsert_bumps_existing_entry_to_front_and_updates_timestamp() {
+        let entries = vec![entry("a.pdf", 100, false), entry("b.pdf", 50, false)];
+        let result = upsert_and_trim(entries, "b.pdf", "b.pdf", 999, 20);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].path, "b.pdf");
+        assert_eq!(result[0].opened_at, 999);
+        assert_eq!(result[1].path, "a.pdf");
+    }
+
+    #[test]
+    fn upsert_trims_non_pinned_entries_to_cap() {
+        let mut entries = Vec::new();
+        for i in 0..5 {
+            entries.push(entry(&format!("f{i}.pdf"), i as u64, false));
+        }
+        let result = upsert_and_trim(entries, "new.pdf", "new.pdf", 999, 3);
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0].path, "new.pdf");
+    }
+
+    #[test]
+    fn upsert_does_not_count_pinned_entries_against_cap() {
+        let mut entries = vec![entry("pinned1.pdf", 1, true), entry("pinned2.pdf", 2, true)];
+        for i in 0..5 {
+            entries.push(entry(&format!("f{i}.pdf"), 10 + i as u64, false));
+        }
+        let result = upsert_and_trim(entries, "new.pdf", "new.pdf", 999, 3);
+        let pinned_count = result.iter().filter(|e| e.pinned).count();
+        let non_pinned_count = result.iter().filter(|e| !e.pinned).count();
+        assert_eq!(pinned_count, 2);
+        assert_eq!(non_pinned_count, 3);
+    }
+
+    #[test]
+    fn toggle_pin_flips_pinned_flag() {
+        let entries = vec![entry("a.pdf", 1, false)];
+        let result = toggle_pin(entries, "a.pdf");
+        assert!(result[0].pinned);
+        let result = toggle_pin(result, "a.pdf");
+        assert!(!result[0].pinned);
+    }
+
+    #[test]
+    fn toggle_pin_on_unknown_path_is_a_noop() {
+        let entries = vec![entry("a.pdf", 1, false)];
+        let result = toggle_pin(entries.clone(), "missing.pdf");
+        assert_eq!(result, entries);
+    }
+
+    #[test]
+    fn remove_entry_filters_out_matching_path() {
+        let entries = vec![entry("a.pdf", 1, false), entry("b.pdf", 2, false)];
+        let result = remove_entry(entries, "a.pdf");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].path, "b.pdf");
+    }
+}
