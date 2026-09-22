@@ -17,6 +17,12 @@ pub fn upsert_and_trim(
     opened_at: u64,
     cap: usize,
 ) -> Vec<RecentEntry> {
+    // Capture the existing entry's pinned state if it exists, otherwise default to false
+    let existing_pinned = entries.iter()
+        .find(|e| e.path == path)
+        .map(|e| e.pinned)
+        .unwrap_or(false);
+
     let mut without_target: Vec<RecentEntry> =
         entries.into_iter().filter(|e| e.path != path).collect();
 
@@ -24,7 +30,7 @@ pub fn upsert_and_trim(
         path: path.to_string(),
         name: name.to_string(),
         opened_at,
-        pinned: false,
+        pinned: existing_pinned,
     });
 
     let (mut pinned, mut unpinned): (Vec<_>, Vec<_>) =
@@ -34,8 +40,9 @@ pub fn upsert_and_trim(
     unpinned.truncate(cap);
     pinned.sort_by(|a, b| b.opened_at.cmp(&a.opened_at));
 
-    // Newly-opened file goes first among non-pinned, unless it was already
-    // pinned (in which case it stays in the pinned group, updated above).
+    // Entries are re-sorted by timestamp at the end, so pinned and unpinned
+    // entries are interleaved by most-recent-first. Grouping for display
+    // (pinned vs. unpinned) happens in the frontend (Task 4's groupByPinned).
     let mut result: Vec<RecentEntry> = Vec::new();
     result.extend(unpinned);
     result.extend(pinned);
@@ -136,5 +143,14 @@ mod tests {
         let result = remove_entry(entries, "a.pdf");
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].path, "b.pdf");
+    }
+
+    #[test]
+    fn upsert_preserves_pinned_flag_on_existing_entry() {
+        let entries = vec![entry("a.pdf", 100, true)];
+        let result = upsert_and_trim(entries, "a.pdf", "a.pdf", 200, 20);
+        assert_eq!(result[0].path, "a.pdf");
+        assert_eq!(result[0].opened_at, 200);
+        assert!(result[0].pinned);
     }
 }
