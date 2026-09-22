@@ -1,9 +1,13 @@
-import { renderPdf } from "./viewer.js";
+import { renderPdf, setStatusCallback } from "./viewer.js";
 
 const { invoke } = window.__TAURI__.core;
 
 const openBtn = document.getElementById("open-btn");
 const status = document.getElementById("status");
+
+setStatusCallback((message) => {
+  status.textContent = message;
+});
 
 async function handleOpenClick() {
   status.textContent = "";
