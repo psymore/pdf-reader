@@ -1,7 +1,20 @@
-# Tauri + Vanilla
+# PDF Reader
 
-This template should help get you started developing with Tauri in vanilla HTML, CSS and Javascript.
+A lightweight Windows PDF reader built with Tauri 2 and vendored PDF.js. There
+is no frontend bundler — `src/` is plain HTML/CSS/JS served as-is, and
+`src/vendor/pdfjs/` contains the pre-built PDF.js library files copied in
+directly.
 
-## Recommended IDE Setup
+See `docs/superpowers/specs/` for the design and task breakdown.
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+## Development
+
+```
+npm install
+npm run tauri dev
+```
+
+## Tests
+
+- `npm test` — frontend unit tests (zoom math) via Vitest.
+- `cargo test` (from `src-tauri/`) — Rust unit tests for file reading.

@@ -22,6 +22,16 @@ describe("computeZoom", () => {
     expect(result).toBe(0.25);
   });
 
+  it("clamps to the default maximum zoom when no options are passed", () => {
+    const result = computeZoom(3.99, -10000);
+    expect(result).toBe(4.0);
+  });
+
+  it("clamps to the default minimum zoom when no options are passed", () => {
+    const result = computeZoom(0.26, 10000);
+    expect(result).toBe(0.25);
+  });
+
   it("returns exactly the current zoom when deltaY is zero", () => {
     const result = computeZoom(1.5, 0);
     expect(result).toBe(1.5);
