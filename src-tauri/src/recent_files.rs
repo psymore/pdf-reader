@@ -86,7 +86,11 @@ pub fn load(app: &tauri::AppHandle) -> Vec<RecentEntry> {
     let Ok(contents) = fs::read_to_string(&path) else {
         return Vec::new();
     };
-    serde_json::from_str(&contents).unwrap_or_default()
+    parse_entries(&contents)
+}
+
+pub fn parse_entries(contents: &str) -> Vec<RecentEntry> {
+    serde_json::from_str(contents).unwrap_or_default()
 }
 
 pub fn save(app: &tauri::AppHandle, entries: &[RecentEntry]) -> Result<(), String> {
@@ -190,5 +194,19 @@ mod tests {
         assert_eq!(result[0].path, "a.pdf");
         assert_eq!(result[0].opened_at, 200);
         assert!(result[0].pinned);
+    }
+
+    #[test]
+    fn parse_entries_round_trips_valid_json() {
+        let entries = vec![entry("a.pdf", 100, false), entry("b.pdf", 200, true)];
+        let json = serde_json::to_string(&entries).unwrap();
+        let result = parse_entries(&json);
+        assert_eq!(result, entries);
+    }
+
+    #[test]
+    fn parse_entries_returns_empty_on_garbage_input() {
+        let result = parse_entries("not valid json {{{");
+        assert!(result.is_empty());
     }
 }

@@ -44,18 +44,26 @@ async function handleOpenClick() {
 
 async function handleOpenRequested({ path }) {
   status.textContent = "";
+  let bytes;
   try {
-    const bytes = await invoke("open_pdf_path", { path });
+    bytes = await invoke("open_pdf_path", { path });
+  } catch (err) {
+    status.textContent = `Error: ${err}`;
+    try {
+      await invoke("remove_recent_entry", { path });
+    } catch {
+      // best-effort cleanup; the read already failed, nothing more to do
+    }
+    emit("file-opened", null); // refresh sidebar to drop the dead entry
+    return;
+  }
+  try {
     await renderPdf(new Uint8Array(bytes));
     showViewer();
     emit("file-opened", { path });
   } catch (err) {
     status.textContent = `Error: ${err}`;
-    try {
-      await invoke("remove_recent_entry", { path });
-    } finally {
-      emit("file-opened", null); // refresh sidebar to drop the dead entry
-    }
+    showEmptyState(); // don't strand the UI on a blank viewer pane
   }
 }
 
@@ -83,4 +91,6 @@ getCurrentWebview().onDragDropEvent((event) => {
   } else {
     document.body.classList.remove("drag-active");
   }
+}).catch(() => {
+  status.textContent = "Drag-and-drop unavailable.";
 });
