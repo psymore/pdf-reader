@@ -1,4 +1,5 @@
 import * as pdfjsLib from "./vendor/pdfjs/pdf.mjs";
+import { computeZoom } from "./zoom.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "./vendor/pdfjs/pdf.worker.mjs";
 
@@ -6,6 +7,17 @@ const container = document.getElementById("viewer-container");
 
 let pdfDoc = null;
 let zoomLevel = 1.0;
+
+container.addEventListener(
+  "wheel",
+  (event) => {
+    if (!event.ctrlKey) return; // plain scroll: let native pan happen
+    event.preventDefault();
+    const newZoom = computeZoom(zoomLevel, event.deltaY);
+    setZoomLevel(newZoom);
+  },
+  { passive: false }
+);
 
 export async function renderPdf(bytes) {
   pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
