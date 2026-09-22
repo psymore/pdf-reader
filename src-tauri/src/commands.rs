@@ -6,7 +6,7 @@ pub fn read_pdf_bytes(path: &Path) -> Result<Vec<u8>, String> {
 }
 
 #[tauri::command]
-pub async fn open_pdf_file(app: tauri::AppHandle) -> Result<Vec<u8>, String> {
+pub async fn open_pdf_file(app: tauri::AppHandle) -> Result<tauri::ipc::Response, String> {
     use tauri_plugin_dialog::DialogExt;
 
     let file_path = app
@@ -20,7 +20,8 @@ pub async fn open_pdf_file(app: tauri::AppHandle) -> Result<Vec<u8>, String> {
             let path = path
                 .as_path()
                 .ok_or_else(|| "Invalid file path".to_string())?;
-            read_pdf_bytes(path)
+            let bytes = read_pdf_bytes(path)?;
+            Ok(tauri::ipc::Response::new(bytes))
         }
         None => Err("cancelled".to_string()),
     }
