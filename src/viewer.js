@@ -20,7 +20,11 @@ container.addEventListener(
 );
 
 export async function renderPdf(bytes) {
-  pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
+  try {
+    pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
+  } catch (err) {
+    throw `Could not open PDF: ${err.message || err}`;
+  }
   zoomLevel = 1.0;
   await rerenderAllPages();
 }
