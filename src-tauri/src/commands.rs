@@ -1,8 +1,39 @@
+use crate::recent_files::{self, RecentEntry};
 use std::fs;
 use std::path::Path;
 
 pub fn read_pdf_bytes(path: &Path) -> Result<Vec<u8>, String> {
     fs::read(path).map_err(|e| format!("Failed to read file: {e}"))
+}
+
+fn file_name_or_path(path: &Path) -> String {
+    path.file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.to_string_lossy().to_string())
+}
+
+/// Reads a PDF's bytes, records it in the recent-files list, and returns
+/// the bytes as an IPC response. Shared by both `open_pdf_file` (native
+/// dialog) and `open_pdf_path` (drag-drop / sidebar reopen).
+fn open_path_and_record(
+    app: &tauri::AppHandle,
+    path: &Path,
+) -> Result<tauri::ipc::Response, String> {
+    let bytes = read_pdf_bytes(path)?;
+
+    let path_str = path.to_string_lossy().to_string();
+    let name = file_name_or_path(path);
+    let entries = recent_files::load(app);
+    let entries = recent_files::upsert_and_trim(
+        entries,
+        &path_str,
+        &name,
+        recent_files::now_millis(),
+        recent_files::RECENT_CAP,
+    );
+    recent_files::save(app, &entries)?;
+
+    Ok(tauri::ipc::Response::new(bytes))
 }
 
 #[tauri::command]
@@ -20,11 +51,42 @@ pub async fn open_pdf_file(app: tauri::AppHandle) -> Result<tauri::ipc::Response
             let path = path
                 .as_path()
                 .ok_or_else(|| "Invalid file path".to_string())?;
-            let bytes = read_pdf_bytes(path)?;
-            Ok(tauri::ipc::Response::new(bytes))
+            open_path_and_record(&app, path)
         }
         None => Err("cancelled".to_string()),
     }
+}
+
+#[tauri::command]
+pub async fn open_pdf_path(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<tauri::ipc::Response, String> {
+    open_path_and_record(&app, Path::new(&path))
+}
+
+#[tauri::command]
+pub fn get_recent_files(app: tauri::AppHandle) -> Vec<RecentEntry> {
+    recent_files::load(&app)
+}
+
+#[tauri::command]
+pub fn toggle_pin(app: tauri::AppHandle, path: String) -> Result<Vec<RecentEntry>, String> {
+    let entries = recent_files::load(&app);
+    let entries = recent_files::toggle_pin(entries, &path);
+    recent_files::save(&app, &entries)?;
+    Ok(entries)
+}
+
+#[tauri::command]
+pub fn remove_recent_entry(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<Vec<RecentEntry>, String> {
+    let entries = recent_files::load(&app);
+    let entries = recent_files::remove_entry(entries, &path);
+    recent_files::save(&app, &entries)?;
+    Ok(entries)
 }
 
 #[cfg(test)]
