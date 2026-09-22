@@ -1,11 +1,29 @@
 :root {
+  color-scheme: dark;
+
+  --bg-app: #201d1a;
+  --bg-sidebar: #24211d;
+  --bg-canvas: #4a443c;
+  --surface-hover: #322d27;
+  --border: #3a352e;
+  --border-idle: #4f483e;
+
+  --text-hi: #f0ece4;
+  --text-lo: #948b7d;
+  --text-faint: #6c6558;
+
+  --accent: #e0a052;
+  --accent-strong: #f2b96c;
+  --accent-soft: rgba(224, 160, 82, 0.14);
+  --danger: #e2685b;
+
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
+  font-size: 13px;
+  line-height: 1.4;
   font-weight: 400;
 
-  color: #0f0f0f;
-  background-color: #f6f6f6;
+  color: var(--text-hi);
+  background-color: var(--bg-app);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -14,114 +32,123 @@
   -webkit-text-size-adjust: 100%;
 }
 
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-
-a:hover {
-  color: #535bf2;
-}
-
-input,
 button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
   font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-}
-
-button {
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: none;
   cursor: pointer;
 }
 
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
-input,
-button {
-  outline: none;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
-  }
-
-  a:hover {
-    color: #24c8db;
-  }
-
-  input,
-  button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
-  }
-  button:active {
-    background-color: #0f0f0f69;
-  }
-}
+/* ---------- toolbar ---------- */
 
 #toolbar {
-  height: 48px;
+  height: 44px;
   box-sizing: border-box;
-  padding: 8px 12px;
+  padding: 0 10px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  background: var(--bg-app);
+  border-bottom: 1px solid var(--border);
 }
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  color: var(--text-lo);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.icon-btn:hover {
+  background: var(--surface-hover);
+  color: var(--accent-strong);
+}
+
+#app-title {
+  font-weight: 600;
+  color: var(--text-hi);
+  letter-spacing: 0.01em;
+}
+
+#status {
+  color: var(--text-lo);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#status.status-error {
+  color: var(--danger);
+}
+
+/* ---------- shell / sidebar ---------- */
 
 #app-shell {
   display: flex;
-  height: calc(100vh - 48px);
+  height: calc(100vh - 44px);
 }
 
 #sidebar {
   width: 220px;
   flex-shrink: 0;
   box-sizing: border-box;
-  padding: 12px 8px;
-  background: #202020;
-  color: #e0e0e0;
+  padding: 8px 6px;
+  background: var(--bg-sidebar);
+  color: var(--text-hi);
+  border-right: 1px solid var(--border);
   overflow-y: auto;
 }
 
+.sidebar-section + .sidebar-section {
+  margin-top: 8px;
+}
+
 .sidebar-heading {
-  font-size: 0.75em;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #888;
-  margin: 12px 8px 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--text-lo);
+  margin: 10px 10px 4px;
+}
+
+.sidebar-heading svg {
+  flex-shrink: 0;
+  opacity: 0.8;
 }
 
 .sidebar-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 8px;
+  padding: 6px 10px;
   border-radius: 6px;
   cursor: pointer;
+  transition: background-color 0.12s ease;
 }
 
 .sidebar-row:hover {
-  background: #2f2f2f;
+  background: var(--surface-hover);
 }
 
 .sidebar-row-label {
@@ -132,37 +159,42 @@ button {
 }
 
 .sidebar-pin-btn {
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  color: #e0e0e0;
+  color: var(--text-lo);
   padding: 0 4px;
   visibility: hidden;
+}
+
+.sidebar-pin-btn:hover {
+  color: var(--accent-strong);
 }
 
 .sidebar-row:hover .sidebar-pin-btn {
   visibility: visible;
 }
 
+/* ---------- canvas / empty state ---------- */
+
 #main-area {
   flex: 1;
   position: relative;
   overflow: hidden;
-  background: #808080;
+  background: var(--bg-canvas);
 }
 
 #empty-state {
   position: absolute;
-  inset: 24px;
+  inset: 28px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  border: 2px dashed #aaa;
-  border-radius: 12px;
-  color: #f0f0f0;
+  gap: 14px;
+  border: 2px dashed var(--border-idle);
+  border-radius: 16px;
+  color: var(--text-lo);
   cursor: pointer;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  background-color: transparent;
+  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
 }
 
 #empty-state[hidden] {
@@ -170,30 +202,217 @@ button {
 }
 
 #empty-state-icon {
-  font-size: 3em;
-  line-height: 1;
-  margin-bottom: 8px;
+  display: flex;
+  transition: color 0.2s ease;
+}
+
+#empty-state-text {
+  margin: 0;
+  font-size: 1.05em;
+  font-weight: 500;
+}
+
+/* gliding gradient ring: a single small pseudo-element, animated only
+   while hovered or receiving a drag, so it costs nothing at idle */
+#empty-state::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    var(--accent) 47%,
+    var(--accent-strong) 50%,
+    var(--accent) 53%,
+    transparent 70%
+  );
+  background-size: 260% 260%;
+  background-position: 0% 50%;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+#empty-state:hover {
+  border-color: transparent;
+  background-color: var(--accent-soft);
+}
+
+#empty-state:hover #empty-state-icon,
+#empty-state:hover #empty-state-text {
+  color: var(--text-hi);
+}
+
+#empty-state:hover::after {
+  opacity: 1;
+  animation: sheen-glide 3.2s linear infinite;
 }
 
 body.drag-active #empty-state {
-  border-color: #396cd8;
-  background-color: rgba(57, 108, 216, 0.1);
+  border-color: transparent;
+  background-color: var(--accent-soft);
+  transform: scale(1.012);
 }
+
+body.drag-active #empty-state #empty-state-icon,
+body.drag-active #empty-state #empty-state-text {
+  color: var(--accent-strong);
+}
+
+body.drag-active #empty-state::after {
+  opacity: 1;
+  animation: sheen-glide-fast 1s linear infinite;
+}
+
+@keyframes sheen-glide {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes sheen-glide-fast {
+  0% {
+    background-position: 0% 50%;
+    filter: saturate(1.35);
+  }
+  100% {
+    background-position: 100% 50%;
+    filter: saturate(1.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #empty-state::after {
+    animation: none !important;
+  }
+  #empty-state {
+    transition: none;
+  }
+}
+
+/* ---------- viewer ---------- */
 
 #viewer-container {
   height: 100%;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  /* always-on, not auto: a scrollbar popping in/out as the live zoom
+     preview crosses the container's width/height would change
+     clientWidth/clientHeight mid-gesture, re-centering content and
+     throwing off the zoom viewport math */
+  overflow: scroll;
+  padding: 24px 0 64px;
 }
 
 #viewer-container[hidden] {
   display: none;
 }
 
+#viewer-container::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+
+#viewer-container::-webkit-scrollbar-track {
+  background: var(--bg-canvas);
+}
+
+#viewer-container::-webkit-scrollbar-thumb {
+  /* visibly lighter than the canvas at rest, not just on hover */
+  background: var(--text-lo);
+  border-radius: 8px;
+  border: 3px solid var(--bg-canvas);
+}
+
+#viewer-container::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-strong);
+}
+
+#viewer-container::-webkit-scrollbar-corner {
+  background: var(--bg-canvas);
+}
+
+#pdf-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .pdf-page {
-  margin: 8px 0;
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+  margin: 10px 0;
   background: white;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 32px -12px rgba(0, 0, 0, 0.6);
+}
+
+/* plays once, only when a document is first opened — never on zoom
+   re-renders, which recreate every canvas and would otherwise replay
+   this on every wheel tick */
+.pdf-page-enter {
+  animation: page-in 0.18s ease-out;
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pdf-page-enter {
+    animation: none;
+  }
+}
+
+/* ---------- zoom pill ---------- */
+
+#zoom-pill {
+  position: absolute;
+  /* cleared past the 12px scrollbar with margin: a native scrollbar's
+     hit-testing can claim clicks in its track even when a DOM element is
+     visually layered on top of it, so the corner near the scrollbar is
+     effectively dead for clicks unless this pill sits clear of it */
+  right: 30px;
+  bottom: 30px;
+  display: flex;
+  align-items: stretch;
+  background: rgba(32, 29, 26, 0.82);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow: 0 6px 20px -6px rgba(0, 0, 0, 0.6);
+}
+
+#zoom-pill[hidden] {
+  display: none;
+}
+
+#zoom-pill button {
+  padding: 7px 12px;
+  color: var(--text-hi);
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+#zoom-pill button:hover {
+  background: var(--surface-hover);
+  color: var(--accent-strong);
+}
+
+#zoom-level {
+  font-variant-numeric: tabular-nums;
+  min-width: 46px;
+  text-align: center;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
 }
