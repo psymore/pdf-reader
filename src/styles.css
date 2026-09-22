@@ -88,13 +88,108 @@ button {
   gap: 12px;
 }
 
-#viewer-container {
-  overflow: auto;
+#app-shell {
+  display: flex;
   height: calc(100vh - 48px);
+}
+
+#sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 12px 8px;
+  background: #202020;
+  color: #e0e0e0;
+  overflow-y: auto;
+}
+
+.sidebar-heading {
+  font-size: 0.75em;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #888;
+  margin: 12px 8px 4px;
+}
+
+.sidebar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.sidebar-row:hover {
+  background: #2f2f2f;
+}
+
+.sidebar-row-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.sidebar-pin-btn {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: #e0e0e0;
+  padding: 0 4px;
+  visibility: hidden;
+}
+
+.sidebar-row:hover .sidebar-pin-btn {
+  visibility: visible;
+}
+
+#main-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
   background: #808080;
+}
+
+#empty-state {
+  position: absolute;
+  inset: 24px;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
+  border: 2px dashed #aaa;
+  border-radius: 12px;
+  color: #f0f0f0;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+#empty-state[hidden] {
+  display: none;
+}
+
+#empty-state-icon {
+  font-size: 3em;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+body.drag-active #empty-state {
+  border-color: #396cd8;
+  background-color: rgba(57, 108, 216, 0.1);
+}
+
+#viewer-container {
+  height: 100%;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+#viewer-container[hidden] {
+  display: none;
 }
 
 .pdf-page {

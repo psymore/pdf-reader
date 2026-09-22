@@ -13,6 +13,24 @@
       <button id="open-btn">Open PDF</button>
       <span id="status"></span>
     </div>
-    <div id="viewer-container"></div>
+    <div id="app-shell">
+      <aside id="sidebar">
+        <div class="sidebar-section">
+          <h3 class="sidebar-heading">Pinned</h3>
+          <div id="sidebar-pinned"></div>
+        </div>
+        <div class="sidebar-section">
+          <h3 class="sidebar-heading">Recent</h3>
+          <div id="sidebar-recent"></div>
+        </div>
+      </aside>
+      <div id="main-area">
+        <div id="empty-state">
+          <div id="empty-state-icon">+</div>
+          <p id="empty-state-text">Drop a PDF here or click to open</p>
+        </div>
+        <div id="viewer-container" hidden></div>
+      </div>
+    </div>
   </body>
 </html>
