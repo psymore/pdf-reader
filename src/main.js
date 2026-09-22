@@ -1,18 +1,19 @@
+import { renderPdf } from "./viewer.js";
+
 const { invoke } = window.__TAURI__.core;
 
-let greetInputEl;
-let greetMsgEl;
+const openBtn = document.getElementById("open-btn");
+const status = document.getElementById("status");
 
-async function greet() {
-  // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-  greetMsgEl.textContent = await invoke("greet", { name: greetInputEl.value });
+async function handleOpenClick() {
+  status.textContent = "";
+  try {
+    const bytes = await invoke("open_pdf_file");
+    await renderPdf(new Uint8Array(bytes));
+  } catch (err) {
+    if (err === "cancelled") return;
+    status.textContent = `Error: ${err}`;
+  }
 }
 
-window.addEventListener("DOMContentLoaded", () => {
-  greetInputEl = document.querySelector("#greet-input");
-  greetMsgEl = document.querySelector("#greet-msg");
-  document.querySelector("#greet-form").addEventListener("submit", (e) => {
-    e.preventDefault();
-    greet();
-  });
-});
+openBtn.addEventListener("click", handleOpenClick);
