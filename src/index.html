@@ -10,26 +10,56 @@
 
   <body>
     <div id="toolbar">
-      <button id="open-btn">Open PDF</button>
+      <button id="open-btn" class="icon-btn" title="Open a PDF" aria-label="Open a PDF file">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+          <path d="M14 3v6h6" />
+          <path d="M12 12v6M9 15h6" />
+        </svg>
+      </button>
+      <span id="app-title">PDF Reader</span>
       <span id="status"></span>
     </div>
     <div id="app-shell">
       <aside id="sidebar">
         <div class="sidebar-section">
-          <h3 class="sidebar-heading">Pinned</h3>
+          <h3 class="sidebar-heading">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 17v5" />
+              <path d="M9 3h6l1 6 3 3v2H5v-2l3-3z" />
+            </svg>
+            Pinned
+          </h3>
           <div id="sidebar-pinned"></div>
         </div>
         <div class="sidebar-section">
-          <h3 class="sidebar-heading">Recent</h3>
+          <h3 class="sidebar-heading">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v5l3 3" />
+            </svg>
+            Recent
+          </h3>
           <div id="sidebar-recent"></div>
         </div>
       </aside>
       <div id="main-area">
         <div id="empty-state">
-          <div id="empty-state-icon">+</div>
+          <div id="empty-state-icon">
+            <svg viewBox="0 0 48 48" width="40" height="40" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+              <path d="M12 6h16l8 8v28a2 2 0 0 1-2 2H12a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z" />
+              <path d="M28 6v8h8" />
+              <path d="M16 26h16M16 32h11" stroke-width="1.5" />
+            </svg>
+          </div>
           <p id="empty-state-text">Drop a PDF here or click to open</p>
         </div>
-        <div id="viewer-container" hidden></div>
+        <div id="viewer-container" hidden><div id="pdf-pages"></div></div>
+        <div id="zoom-pill" hidden>
+          <button id="zoom-out" aria-label="Zoom out">&minus;</button>
+          <button id="zoom-level" aria-label="Reset zoom to 100%">100%</button>
+          <button id="zoom-in" aria-label="Zoom in">+</button>
+        </div>
       </div>
     </div>
   </body>

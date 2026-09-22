@@ -65,6 +65,15 @@ pub async fn open_pdf_path(
     open_path_and_record(&app, Path::new(&path))
 }
 
+/// Returns the PDF path passed on the command line, if any — this is how
+/// Windows launches the app for "Open with" / file-association double-click.
+#[tauri::command]
+pub fn get_launch_path() -> Option<String> {
+    std::env::args()
+        .skip(1)
+        .find(|arg| arg.to_lowercase().ends_with(".pdf"))
+}
+
 #[tauri::command]
 pub fn get_recent_files(app: tauri::AppHandle) -> Vec<RecentEntry> {
     recent_files::load(&app)
