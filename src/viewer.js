@@ -13,6 +13,7 @@ let renderGeneration = 0;
 let statusCallback = null;
 let zoomChangeCallback = null;
 let zoomDebounceTimer = null;
+let doubleTapBaseZoom = null; // set while a double-tap/double-click has zoomed in; null once back at base
 
 export function setStatusCallback(fn) {
   statusCallback = fn;
@@ -42,6 +43,7 @@ container.addEventListener(
   (event) => {
     if (!event.ctrlKey) return; // plain scroll: let native pan happen
     event.preventDefault();
+    doubleTapBaseZoom = null;
     setZoom(computeZoom(zoomLevel, event.deltaY));
     clearTimeout(zoomDebounceTimer);
     zoomDebounceTimer = setTimeout(() => {
@@ -53,36 +55,127 @@ container.addEventListener(
   { passive: false }
 );
 
+// Pinch-to-zoom: the viewport disables the browser's own pinch-zoom (it would
+// fight the app's zoom state), so this reimplements it directly. Mirrors the
+// ctrl+wheel handler above — update the displayed zoom live as fingers move,
+// but only pay for an actual canvas re-render once the gesture settles.
+let pinchStartDistance = null;
+let pinchStartZoom = null;
+
+function touchDistance(touches) {
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.hypot(dx, dy);
+}
+
+container.addEventListener(
+  "touchstart",
+  (event) => {
+    if (event.touches.length === 2 && pdfDoc) {
+      doubleTapBaseZoom = null;
+      pinchStartDistance = touchDistance(event.touches);
+      pinchStartZoom = zoomLevel;
+    }
+  },
+  { passive: true }
+);
+
+container.addEventListener(
+  "touchmove",
+  (event) => {
+    if (event.touches.length !== 2 || pinchStartDistance === null) return;
+    const scale = touchDistance(event.touches) / pinchStartDistance;
+    setZoom(Math.min(4.0, Math.max(0.25, pinchStartZoom * scale)));
+    clearTimeout(zoomDebounceTimer);
+    zoomDebounceTimer = setTimeout(() => {
+      rerenderAllPages().catch((err) => {
+        reportError(`Could not render PDF: ${err.message || err}`);
+      });
+    }, 120);
+  },
+  { passive: true }
+);
+
+const endPinch = () => {
+  pinchStartDistance = null;
+  pinchStartZoom = null;
+};
+
+container.addEventListener("touchend", (event) => {
+  if (event.touches.length < 2) endPinch();
+});
+container.addEventListener("touchcancel", endPinch);
+
+// Desktop double-click and a mobile double-tap both fire "dblclick"; toggle
+// between the current zoom and 2x it, so phones get a zoom gesture without
+// needing full pinch-to-zoom support.
+container.addEventListener("dblclick", (event) => {
+  if (!pdfDoc) return;
+  event.preventDefault();
+  if (doubleTapBaseZoom === null) {
+    doubleTapBaseZoom = zoomLevel;
+    setZoom(Math.min(4.0, zoomLevel * 2));
+  } else {
+    setZoom(doubleTapBaseZoom);
+    doubleTapBaseZoom = null;
+  }
+  rerenderAllPages().catch((err) => {
+    reportError(`Could not render PDF: ${err.message || err}`);
+  });
+});
+
 export async function zoomIn() {
+  doubleTapBaseZoom = null;
   setZoom(stepZoom(zoomLevel, 1));
   await rerenderAllPages();
 }
 
 export async function zoomOut() {
+  doubleTapBaseZoom = null;
   setZoom(stepZoom(zoomLevel, -1));
   await rerenderAllPages();
 }
 
+// Resets to the fit-width zoom (not a hard 100%) since that's the view that
+// actually fits the screen regardless of the page's native size, and snaps
+// scroll back to the top-left corner so a pan/zoom excursion is fully undone.
 export async function resetZoom() {
-  setZoom(1.0);
+  doubleTapBaseZoom = null;
+  setZoom(await computeFitZoom());
   await rerenderAllPages();
+  container.scrollTop = 0;
+  container.scrollLeft = 0;
+}
+
+async function computeFitZoom() {
+  const page = await pdfDoc.getPage(1);
+  const nativeWidth = page.getViewport({ scale: 1 }).width;
+  // container.clientWidth already excludes whatever the platform actually
+  // reserves for its scrollbar (which varies — desktop reserves the custom
+  // 16px track, Android's overlay scrollbar reserves none), so it's the
+  // exact space a page has to fill with zero left/right margin. This only
+  // reads correctly once the caller has unhidden the container.
+  const availableWidth = container.clientWidth;
+  if (availableWidth <= 0 || nativeWidth <= 0) return 1.0;
+  return Math.min(4.0, Math.max(0.25, availableWidth / nativeWidth));
 }
 
 export async function renderPdf(bytes) {
+  doubleTapBaseZoom = null;
+  pagesWrapper.innerHTML = "";
   try {
     pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
   } catch (err) {
     pdfDoc = null;
-    pagesWrapper.innerHTML = "";
     throw `Could not open PDF: ${err.message || err}`;
   }
-  setZoom(1.0);
-  renderedZoom = 1.0;
+  const fitZoom = await computeFitZoom();
+  setZoom(fitZoom);
+  renderedZoom = fitZoom;
   try {
     await rerenderAllPages({ animate: true });
   } catch (err) {
     pdfDoc = null;
-    pagesWrapper.innerHTML = "";
     throw `Could not open PDF: ${err.message || err}`;
   }
 }

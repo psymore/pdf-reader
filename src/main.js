@@ -42,12 +42,15 @@ async function openViaBytesResult(invokePromise) {
   setStatus("");
   try {
     const bytes = await invokePromise;
-    await renderPdf(new Uint8Array(bytes));
+    // shown before rendering, not after: fit-width needs the viewer's real
+    // layout width, which reads as 0 while it's still display:none
     showViewer();
+    await renderPdf(new Uint8Array(bytes));
     emit("file-opened", null);
   } catch (err) {
     if (err === "cancelled") return;
     setStatus(`Error: ${err}`);
+    showEmptyState();
   }
 }
 
@@ -71,8 +74,8 @@ async function handleOpenRequested({ path }) {
     return;
   }
   try {
-    await renderPdf(new Uint8Array(bytes));
     showViewer();
+    await renderPdf(new Uint8Array(bytes));
     emit("file-opened", { path });
   } catch (err) {
     setStatus(`Error: ${err}`);

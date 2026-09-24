@@ -3,3 +3,7 @@
 node_modules/
 dist/
 src-tauri/target/
+src-tauri/gen/
+.android-*.log
+.emulator*.log
+.emulator-screenshot*.png

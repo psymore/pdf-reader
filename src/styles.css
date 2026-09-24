@@ -17,6 +17,9 @@
   --accent-soft: rgba(224, 160, 82, 0.14);
   --danger: #e2685b;
 
+  --toolbar-content-h: 44px;
+  --toolbar-tint: var(--bg-canvas);
+
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
   font-size: 13px;
   line-height: 1.4;
@@ -34,6 +37,9 @@
 
 * {
   box-sizing: border-box;
+  /* native tap-flash (blue on Android WebView) would otherwise show up
+     alongside our own :active/:hover treatments on every tap */
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
 }
 
 body {
@@ -57,13 +63,28 @@ button:focus-visible {
 /* ---------- toolbar ---------- */
 
 #toolbar {
-  height: 44px;
+  /* padded down by the status bar / notch on Android, via viewport-fit=cover;
+     env() resolves to 0 everywhere else, so desktop is unaffected */
+  height: calc(var(--toolbar-content-h) + env(safe-area-inset-top, 0px));
+  padding: env(safe-area-inset-top, 0px) 10px 0;
   box-sizing: border-box;
-  padding: 0 10px;
   display: flex;
   align-items: center;
   gap: 10px;
-  background: var(--bg-app);
+  /* fades from white at the very top down into the toolbar (like WPS
+     Office) so the phone's own clock/battery icons stay legible instead of
+     sitting flush against a hard dark edge; the fade runs across roughly
+     2x the status-bar inset so it reads as a real gradient rather than a
+     two-tone strip. On desktop env() is 0, so both stops land at 0 and the
+     gradient collapses to a plain --toolbar-tint background. --toolbar-tint
+     defaults to the main content area's color and is overridden to a paper
+     tone on touch devices (see the pointer: coarse block below), which also
+     flips the toolbar's icon/title colors dark to stay legible on it. */
+  background: linear-gradient(
+      to bottom,
+      #ffffff 0,
+      var(--toolbar-tint) calc(env(safe-area-inset-top, 0px) * 2)
+    );
   border-bottom: 1px solid var(--border);
 }
 
@@ -78,7 +99,8 @@ button:focus-visible {
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-.icon-btn:hover {
+.icon-btn:hover,
+.icon-btn:active {
   background: var(--surface-hover);
   color: var(--accent-strong);
 }
@@ -104,7 +126,7 @@ button:focus-visible {
 
 #app-shell {
   display: flex;
-  height: calc(100vh - 44px);
+  height: calc(100vh - var(--toolbar-content-h) - env(safe-area-inset-top, 0px));
 }
 
 #sidebar {
@@ -116,6 +138,8 @@ button:focus-visible {
   color: var(--text-hi);
   border-right: 1px solid var(--border);
   overflow-y: auto;
+  /* labels and the pin star read as cramped at the base size, on desktop too */
+  font-size: 1.2em;
 }
 
 .sidebar-section + .sidebar-section {
@@ -147,7 +171,8 @@ button:focus-visible {
   transition: background-color 0.12s ease;
 }
 
-.sidebar-row:hover {
+.sidebar-row:hover,
+.sidebar-row:active {
   background: var(--surface-hover);
 }
 
@@ -172,6 +197,14 @@ button:focus-visible {
   visibility: visible;
 }
 
+#sidebar-toggle-btn {
+  display: none;
+}
+
+#sidebar-backdrop {
+  display: none;
+}
+
 /* ---------- canvas / empty state ---------- */
 
 #main-area {
@@ -189,12 +222,12 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
   gap: 14px;
-  border: 2px dashed var(--border-idle);
+  border: 2px solid var(--accent);
   border-radius: 16px;
   color: var(--text-lo);
   cursor: pointer;
   background-color: transparent;
-  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+  transition: background-color 0.2s ease, transform 0.2s ease;
 }
 
 #empty-state[hidden] {
@@ -212,49 +245,19 @@ button:focus-visible {
   font-weight: 500;
 }
 
-/* gliding gradient ring: a single small pseudo-element, animated only
-   while hovered or receiving a drag, so it costs nothing at idle */
-#empty-state::after {
-  content: "";
-  position: absolute;
-  inset: -2px;
-  border-radius: inherit;
-  padding: 2px;
-  background: linear-gradient(
-    115deg,
-    transparent 30%,
-    var(--accent) 47%,
-    var(--accent-strong) 50%,
-    var(--accent) 53%,
-    transparent 70%
-  );
-  background-size: 260% 260%;
-  background-position: 0% 50%;
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  opacity: 0;
-  transition: opacity 0.25s ease;
-  pointer-events: none;
-}
-
-#empty-state:hover {
-  border-color: transparent;
+#empty-state:hover,
+#empty-state:active {
   background-color: var(--accent-soft);
 }
 
 #empty-state:hover #empty-state-icon,
-#empty-state:hover #empty-state-text {
+#empty-state:hover #empty-state-text,
+#empty-state:active #empty-state-icon,
+#empty-state:active #empty-state-text {
   color: var(--text-hi);
 }
 
-#empty-state:hover::after {
-  opacity: 1;
-  animation: sheen-glide 3.2s linear infinite;
-}
-
 body.drag-active #empty-state {
-  border-color: transparent;
   background-color: var(--accent-soft);
   transform: scale(1.012);
 }
@@ -264,35 +267,7 @@ body.drag-active #empty-state #empty-state-text {
   color: var(--accent-strong);
 }
 
-body.drag-active #empty-state::after {
-  opacity: 1;
-  animation: sheen-glide-fast 1s linear infinite;
-}
-
-@keyframes sheen-glide {
-  0% {
-    background-position: 0% 50%;
-  }
-  100% {
-    background-position: 100% 50%;
-  }
-}
-
-@keyframes sheen-glide-fast {
-  0% {
-    background-position: 0% 50%;
-    filter: saturate(1.35);
-  }
-  100% {
-    background-position: 100% 50%;
-    filter: saturate(1.35);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  #empty-state::after {
-    animation: none !important;
-  }
   #empty-state {
     transition: none;
   }
@@ -341,7 +316,13 @@ body.drag-active #empty-state::after {
 #pdf-pages {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  /* "safe" keeps this from reproducing the classic centered-overflow scroll
+     trap: once a zoomed-in page is wider than the container, plain `center`
+     anchors the overflow equally on both sides, and the left/top half
+     becomes permanently unreachable because scrollLeft/scrollTop can't go
+     negative. "safe" falls back to start-alignment once content overflows,
+     so the full page stays reachable by scrolling. */
+  align-items: safe center;
 }
 
 .pdf-page {
@@ -383,7 +364,8 @@ body.drag-active #empty-state::after {
      visually layered on top of it, so the corner near the scrollbar is
      effectively dead for clicks unless this pill sits clear of it */
   right: 30px;
-  bottom: 30px;
+  /* padded above the gesture-nav bar on Android; env() is 0 elsewhere */
+  bottom: calc(30px + env(safe-area-inset-bottom, 0px));
   display: flex;
   align-items: stretch;
   background: rgba(32, 29, 26, 0.82);
@@ -404,7 +386,8 @@ body.drag-active #empty-state::after {
   transition: background-color 0.12s ease, color 0.12s ease;
 }
 
-#zoom-pill button:hover {
+#zoom-pill button:hover,
+#zoom-pill button:active {
   background: var(--surface-hover);
   color: var(--accent-strong);
 }
@@ -415,4 +398,131 @@ body.drag-active #empty-state::after {
   text-align: center;
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
+}
+
+/* ---------- touch targets (any coarse pointer, e.g. phones/tablets) ---------- */
+
+@media (pointer: coarse) {
+  :root {
+    --toolbar-content-h: 52px;
+    /* a paper tone, not the dark app palette — reads like a reading app's
+       chrome (WPS, Kindle) and keeps the white status-bar fade subtle
+       instead of cutting hard into a saturated color */
+    --toolbar-tint: #f4f1ea;
+  }
+
+  #toolbar {
+    gap: 4px;
+  }
+
+  /* icon/title colors are tuned for the dark desktop toolbar; flip them to
+     ink tones here so they stay legible on the paper-colored mobile one */
+  #toolbar .icon-btn {
+    color: #4a443c;
+  }
+
+  #toolbar .icon-btn:hover,
+  #toolbar .icon-btn:active {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  #toolbar #app-title {
+    color: #201d1a;
+  }
+
+  #toolbar #status {
+    color: #6c6558;
+  }
+
+  #toolbar #status.status-error {
+    color: var(--danger);
+  }
+
+  .icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .sidebar-row {
+    padding: 10px 10px;
+  }
+
+  /* hover never fires on touch, so the pin control must stay reachable */
+  .sidebar-pin-btn {
+    visibility: visible;
+    padding: 6px 8px;
+  }
+
+  #zoom-pill button {
+    padding: 12px 16px;
+  }
+}
+
+/* ---------- narrow screens: sidebar becomes an off-canvas drawer ---------- */
+
+@media (max-width: 640px) {
+  #sidebar-toggle-btn {
+    display: flex;
+  }
+
+  #app-shell {
+    position: relative;
+  }
+
+  #sidebar {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: min(80vw, 300px);
+    z-index: 20;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease-out;
+    box-shadow: 16px 0 32px -12px rgba(0, 0, 0, 0.5);
+    /* let JS own horizontal drag-to-close; only vertical list scrolling
+       stays native, so the browser doesn't grab the gesture first */
+    touch-action: pan-y;
+  }
+
+  #app-shell.sidebar-open #sidebar {
+    transform: translateX(0);
+  }
+
+  #sidebar-backdrop {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease-out;
+  }
+
+  #app-shell.sidebar-open #sidebar-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  #zoom-pill {
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* touch devices use an overlay scrollbar that takes no layout space, so
+   the always-on classic scrollbar above would otherwise reserve a dead
+   gutter on the right of the viewer for no reason. `display: none` (not
+   just width/height: 0) is what actually drops the reserved layout space
+   in Chromium-based WebViews — a zero-sized but still-classic scrollbar
+   can otherwise keep a residual gutter. */
+@media (pointer: coarse) {
+  #viewer-container {
+    scrollbar-width: none; /* standards-track fallback (Firefox/GeckoView) */
+  }
+
+  #viewer-container::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
 }
