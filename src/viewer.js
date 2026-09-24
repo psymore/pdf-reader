@@ -43,6 +43,10 @@ let statusCallback = null;
 let zoomDebounceTimer = null;
 let resizeDebounceTimer = null;
 
+function isDesktopTwoPageMode() {
+  return window.innerWidth > 1200;
+}
+
 export function setStatusCallback(fn) {
   statusCallback = fn;
 }
@@ -269,7 +273,10 @@ window.addEventListener("resize", () => {
       // than the viewport with dead space beside it, exactly the bug this
       // whole pan/zoom model exists to make impossible.
       if (zoomLevel < minZoom) zoomLevel = minZoom;
-      updateView({ rerender: true });
+      // Re-render to handle two-page mode toggle on desktop window resize
+      rerenderAllPages().catch((err) => {
+        reportError(`Could not render PDF: ${err.message || err}`);
+      });
     });
   }, RESIZE_SETTLE_DELAY);
 });
@@ -284,6 +291,13 @@ async function computeFitZoom() {
   // reads correctly once the caller has unhidden the container.
   const availableWidth = container.clientWidth;
   if (availableWidth <= 0 || nativeWidth <= 0) return 1.0;
+
+  const twoPageMode = isDesktopTwoPageMode();
+  if (twoPageMode) {
+    // For two-page mode: account for two pages + gap (10px) in the calculation
+    const availablePerPage = (availableWidth - 10) / 2;
+    return Math.min(MAX_ZOOM, Math.max(0.25, availablePerPage / nativeWidth));
+  }
   return Math.min(MAX_ZOOM, Math.max(0.25, availableWidth / nativeWidth));
 }
 
@@ -321,6 +335,9 @@ async function rerenderAllPages({ animate = false } = {}) {
   const targetZoom = zoomLevel; // pin the scale for this pass even if a gesture keeps moving
   const outputScale = window.devicePixelRatio || 1;
   const fragment = document.createDocumentFragment();
+  const twoPageMode = isDesktopTwoPageMode();
+
+  let currentRowContainer = null;
 
   for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
     if (myGeneration !== renderGeneration) return; // a newer render superseded this one
@@ -334,7 +351,34 @@ async function rerenderAllPages({ animate = false } = {}) {
     canvas.style.width = `${Math.floor(viewport.width)}px`;
     canvas.style.height = `${Math.floor(viewport.height)}px`;
     canvas.className = animate ? "pdf-page pdf-page-enter" : "pdf-page";
-    fragment.appendChild(canvas);
+
+    if (twoPageMode) {
+      // For pages 1-2: side-by-side with special handling
+      if (pageNum <= 2) {
+        if (pageNum === 1) {
+          currentRowContainer = document.createElement("div");
+          currentRowContainer.className = "pdf-row-two-page";
+        }
+        currentRowContainer.appendChild(canvas);
+        if (pageNum === 2) {
+          fragment.appendChild(currentRowContainer);
+          currentRowContainer = null;
+        }
+      } else {
+        // Pages 3+: group by 2 in rows
+        if ((pageNum - 3) % 2 === 0) {
+          currentRowContainer = document.createElement("div");
+          currentRowContainer.className = "pdf-row-two-page";
+        }
+        currentRowContainer.appendChild(canvas);
+        if ((pageNum - 3) % 2 === 1 || pageNum === pdfDoc.numPages) {
+          fragment.appendChild(currentRowContainer);
+          if (pageNum !== pdfDoc.numPages) currentRowContainer = null;
+        }
+      }
+    } else {
+      fragment.appendChild(canvas);
+    }
 
     const ctx = canvas.getContext("2d");
     const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
@@ -345,6 +389,7 @@ async function rerenderAllPages({ animate = false } = {}) {
   if (myGeneration !== renderGeneration) return;
   pagesWrapper.innerHTML = "";
   pagesWrapper.appendChild(fragment);
+  pagesWrapper.classList.toggle("two-page-mode", twoPageMode);
   renderedZoom = targetZoom;
   // Measured post-layout, at scale 1 (renderedZoom === zoomLevel right now):
   // this is the exact on-screen content size, and the baseline contentSize()

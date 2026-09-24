@@ -308,6 +308,19 @@ body.drag-active #empty-state #empty-state-text {
   will-change: transform;
 }
 
+#pdf-pages.two-page-mode {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-content: flex-start;
+}
+
+.pdf-row-two-page {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  margin: 10px 0;
+}
+
 .pdf-page {
   margin: 10px 0;
   background: white;
