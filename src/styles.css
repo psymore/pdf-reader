@@ -277,52 +277,35 @@ body.drag-active #empty-state #empty-state-text {
 
 #viewer-container {
   height: 100%;
-  /* always-on, not auto: a scrollbar popping in/out as the live zoom
-     preview crosses the container's width/height would change
-     clientWidth/clientHeight mid-gesture, re-centering content and
-     throwing off the zoom viewport math */
-  overflow: scroll;
+  /* No native scrolling at all: pan and zoom are both driven by a single JS
+     transform on #pdf-pages (see viewer.js), with pan/zoom bounds clamped
+     explicitly in JS. That's what makes "can't drag the page past its own
+     edge" an actual invariant instead of something the browser's own
+     scroll/overflow model happens to provide (it didn't, reliably). */
+  overflow: hidden;
   padding: 24px 0 64px;
+  /* We handle every gesture (single-finger pan, pinch) ourselves; ceding
+     nothing to the browser avoids it also trying to run its own native
+     pan/zoom/double-tap handling on the same touch stream. */
+  touch-action: none;
 }
 
 #viewer-container[hidden] {
   display: none;
 }
 
-#viewer-container::-webkit-scrollbar {
-  width: 16px;
-  height: 16px;
-}
-
-#viewer-container::-webkit-scrollbar-track {
-  background: var(--bg-canvas);
-}
-
-#viewer-container::-webkit-scrollbar-thumb {
-  /* visibly lighter than the canvas at rest, not just on hover */
-  background: var(--text-lo);
-  border-radius: 8px;
-  border: 3px solid var(--bg-canvas);
-}
-
-#viewer-container::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-strong);
-}
-
-#viewer-container::-webkit-scrollbar-corner {
-  background: var(--bg-canvas);
-}
-
 #pdf-pages {
   display: flex;
   flex-direction: column;
-  /* "safe" keeps this from reproducing the classic centered-overflow scroll
-     trap: once a zoomed-in page is wider than the container, plain `center`
-     anchors the overflow equally on both sides, and the left/top half
-     becomes permanently unreachable because scrollLeft/scrollTop can't go
-     negative. "safe" falls back to start-alignment once content overflows,
-     so the full page stays reachable by scrolling. */
-  align-items: safe center;
+  /* fit-content (not the block default of filling the container) so this
+     box's own width/scrollWidth is always exactly the widest page's real
+     width — viewer.js measures it after every render to know the true
+     on-screen content size, and a container-filling box would misreport
+     that the moment a page is zoomed wider than the viewport. */
+  width: fit-content;
+  /* transform-origin is set to the top-left in JS (viewer.js), matching the
+     pan/zoom math there, which treats (0, 0) as the content's anchor point. */
+  will-change: transform;
 }
 
 .pdf-page {
@@ -353,51 +336,6 @@ body.drag-active #empty-state #empty-state-text {
   .pdf-page-enter {
     animation: none;
   }
-}
-
-/* ---------- zoom pill ---------- */
-
-#zoom-pill {
-  position: absolute;
-  /* cleared past the 12px scrollbar with margin: a native scrollbar's
-     hit-testing can claim clicks in its track even when a DOM element is
-     visually layered on top of it, so the corner near the scrollbar is
-     effectively dead for clicks unless this pill sits clear of it */
-  right: 30px;
-  /* padded above the gesture-nav bar on Android; env() is 0 elsewhere */
-  bottom: calc(30px + env(safe-area-inset-bottom, 0px));
-  display: flex;
-  align-items: stretch;
-  background: rgba(32, 29, 26, 0.82);
-  backdrop-filter: blur(6px);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  overflow: hidden;
-  box-shadow: 0 6px 20px -6px rgba(0, 0, 0, 0.6);
-}
-
-#zoom-pill[hidden] {
-  display: none;
-}
-
-#zoom-pill button {
-  padding: 7px 12px;
-  color: var(--text-hi);
-  transition: background-color 0.12s ease, color 0.12s ease;
-}
-
-#zoom-pill button:hover,
-#zoom-pill button:active {
-  background: var(--surface-hover);
-  color: var(--accent-strong);
-}
-
-#zoom-level {
-  font-variant-numeric: tabular-nums;
-  min-width: 46px;
-  text-align: center;
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border);
 }
 
 /* ---------- touch targets (any coarse pointer, e.g. phones/tablets) ---------- */
@@ -453,10 +391,6 @@ body.drag-active #empty-state #empty-state-text {
     visibility: visible;
     padding: 6px 8px;
   }
-
-  #zoom-pill button {
-    padding: 12px 16px;
-  }
 }
 
 /* ---------- narrow screens: sidebar becomes an off-canvas drawer ---------- */
@@ -502,27 +436,5 @@ body.drag-active #empty-state #empty-state-text {
     opacity: 1;
     pointer-events: auto;
   }
-
-  #zoom-pill {
-    right: 16px;
-    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-  }
 }
 
-/* touch devices use an overlay scrollbar that takes no layout space, so
-   the always-on classic scrollbar above would otherwise reserve a dead
-   gutter on the right of the viewer for no reason. `display: none` (not
-   just width/height: 0) is what actually drops the reserved layout space
-   in Chromium-based WebViews — a zero-sized but still-classic scrollbar
-   can otherwise keep a residual gutter. */
-@media (pointer: coarse) {
-  #viewer-container {
-    scrollbar-width: none; /* standards-track fallback (Firefox/GeckoView) */
-  }
-
-  #viewer-container::-webkit-scrollbar {
-    display: none;
-    width: 0;
-    height: 0;
-  }
-}

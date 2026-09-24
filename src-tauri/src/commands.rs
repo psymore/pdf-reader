@@ -23,16 +23,33 @@ fn file_name_or_path(file_path: &FilePath) -> String {
 /// Android SAF `content://` URIs encode the underlying path/display name in
 /// their last segment — e.g. `.../document/raw%3A%2Fstorage%2Femulated%2F0%2FDownload%2Ffoo.pdf`
 /// (downloads provider) or `.../document/primary%3ADownload%2Ffoo.pdf` (external
-/// storage provider). Percent-decode that segment and take its basename so the
-/// sidebar/recent list can show "foo.pdf" instead of the whole URI.
+/// storage provider). Percent-decode that segment and pull "foo.pdf" out of it
+/// so the sidebar/recent list shows a real name instead of the raw URI.
 fn extract_display_name(uri: &str) -> String {
     let last_segment = uri.rsplit('/').next().unwrap_or(uri);
     let decoded = percent_decode(last_segment);
-    decoded
-        .rsplit(|c| c == '/' || c == ':')
-        .find(|s| !s.is_empty())
-        .map(|s| s.to_string())
+    basename_ending_in_pdf(&decoded)
+        .or_else(|| {
+            decoded
+                .rsplit(|c| c == '/' || c == ':')
+                .find(|s| !s.is_empty())
+                .map(|s| s.to_string())
+        })
         .unwrap_or_else(|| uri.to_string())
+}
+
+/// Anchors on the `.pdf` extension itself and takes everything back to the
+/// nearest `/` or `:` before it, rather than assuming the filename is the
+/// whole trailing segment — some providers tack extra suffixes (a revision
+/// id, a query-like fragment) onto the segment after the real file name.
+fn basename_ending_in_pdf(decoded: &str) -> Option<String> {
+    let ext_at = decoded.to_lowercase().rfind(".pdf")?;
+    let end = ext_at + 4;
+    let start = decoded[..ext_at]
+        .rfind(|c| c == '/' || c == ':')
+        .map(|i| i + 1)
+        .unwrap_or(0);
+    Some(decoded[start..end].to_string())
 }
 
 fn percent_decode(s: &str) -> String {
@@ -194,5 +211,11 @@ mod tests {
     fn falls_back_to_full_uri_when_no_basename_found() {
         let uri = "content://com.example.provider/document/12345";
         assert_eq!(extract_display_name(uri), "12345");
+    }
+
+    #[test]
+    fn strips_trailing_suffix_after_pdf_extension() {
+        let uri = "content://com.example.provider/document/primary%3ADownload%2FEgeOzel_CV.pdf%3Frev%3D3";
+        assert_eq!(extract_display_name(uri), "EgeOzel_CV.pdf");
     }
 }

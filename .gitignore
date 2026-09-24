@@ -7,3 +7,21 @@ src-tauri/gen/
 .android-*.log
 .emulator*.log
 .emulator-screenshot*.png
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Android/Tauri signing secrets and machine-local config
+*.keystore
+*.jks
+key.properties
+local.properties
+
+# Build outputs that can end up outside src-tauri/gen/
+*.apk
+*.aab
+
+# Env files that may hold secrets
+.env
+.env.local
