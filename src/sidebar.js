@@ -5,13 +5,14 @@ const { invoke } = window.__TAURI__.core;
 
 let pinnedContainer = null;
 let recentContainer = null;
+let activePath = null;
 
 export function initSidebar() {
   pinnedContainer = document.getElementById("sidebar-pinned");
   recentContainer = document.getElementById("sidebar-recent");
 
   refresh();
-  on("file-opened", refresh);
+  on("file-opened", (detail) => refresh(detail?.path ?? null));
 
   initDrawer();
 }
@@ -130,9 +131,10 @@ function initSwipeToClose(sidebar, setOpen) {
   sidebar.addEventListener("touchcancel", endSwipe);
 }
 
-async function refresh() {
+async function refresh(openedPath) {
   const entries = await invoke("get_recent_files");
   const { pinned, recent } = groupByPinned(entries);
+  if (openedPath !== undefined) activePath = openedPath ?? entries[0]?.path ?? null;
   render(pinnedContainer, pinned);
   render(recentContainer, recent);
 }
@@ -147,6 +149,8 @@ function render(container, entries) {
 function renderRow(entry) {
   const row = document.createElement("div");
   row.className = "sidebar-row";
+  row.classList.toggle("active", entry.path === activePath);
+  row.setAttribute("aria-current", entry.path === activePath ? "true" : "false");
 
   const label = document.createElement("span");
   label.className = "sidebar-row-label";

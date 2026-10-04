@@ -1,4 +1,4 @@
-import { renderPdf, setStatusCallback } from "./viewer.js";
+import { renderPdf, setStatusCallback, togglePageMode, isSinglePageMode, zoomByStep, resetZoom } from "./viewer.js";
 import { emit, on } from "./app-events.js";
 import { initSidebar } from "./sidebar.js";
 import { initEmptyState } from "./empty-state.js";
@@ -7,7 +7,12 @@ const { invoke } = window.__TAURI__.core;
 const { getCurrentWebview } = window.__TAURI__.webview;
 
 const openBtn = document.getElementById("open-btn");
+const pageModeBtn = document.getElementById("page-mode-btn");
+const zoomInBtn = document.getElementById("zoom-in-btn");
+const zoomOutBtn = document.getElementById("zoom-out-btn");
+const zoomResetBtn = document.getElementById("zoom-reset-btn");
 const status = document.getElementById("status");
+const loadingIndicator = document.getElementById("loading-indicator");
 const emptyState = document.getElementById("empty-state");
 const viewerContainer = document.getElementById("viewer-container");
 
@@ -28,19 +33,29 @@ function showEmptyState() {
   viewerContainer.hidden = true;
 }
 
+function syncPageModeButton() {
+  pageModeBtn.classList.toggle("single-page-mode", isSinglePageMode());
+}
+
 async function openViaBytesResult(invokePromise) {
   setStatus("");
+  loadingIndicator.hidden = false;
   try {
     const bytes = await invokePromise;
-    // shown before rendering, not after: fit-width needs the viewer's real
-    // layout width, which reads as 0 while it's still display:none
     showViewer();
     await renderPdf(new Uint8Array(bytes));
+    pageModeBtn.hidden = false;
+    zoomInBtn.hidden = false;
+    zoomOutBtn.hidden = false;
+    zoomResetBtn.hidden = false;
+    syncPageModeButton();
     emit("file-opened", null);
   } catch (err) {
     if (err === "cancelled") return;
     setStatus(`Error: ${err}`);
     showEmptyState();
+  } finally {
+    loadingIndicator.hidden = true;
   }
 }
 
@@ -50,11 +65,13 @@ async function handleOpenClick() {
 
 async function handleOpenRequested({ path }) {
   setStatus("");
+  loadingIndicator.hidden = false;
   let bytes;
   try {
     bytes = await invoke("open_pdf_path", { path });
   } catch (err) {
     setStatus(`Error: ${err}`);
+    loadingIndicator.hidden = true;
     try {
       await invoke("remove_recent_entry", { path });
     } catch {
@@ -66,14 +83,48 @@ async function handleOpenRequested({ path }) {
   try {
     showViewer();
     await renderPdf(new Uint8Array(bytes));
+    pageModeBtn.hidden = false;
+    zoomInBtn.hidden = false;
+    zoomOutBtn.hidden = false;
+    zoomResetBtn.hidden = false;
+    syncPageModeButton();
     emit("file-opened", { path });
   } catch (err) {
     setStatus(`Error: ${err}`);
     showEmptyState(); // don't strand the UI on a blank viewer pane
+  } finally {
+    loadingIndicator.hidden = true;
   }
 }
 
 openBtn.addEventListener("click", handleOpenClick);
+pageModeBtn.addEventListener("click", () => {
+  togglePageMode();
+  syncPageModeButton();
+});
+zoomInBtn.addEventListener("click", () => zoomByStep(1));
+zoomOutBtn.addEventListener("click", () => zoomByStep(-1));
+zoomResetBtn.addEventListener("click", () => resetZoom());
+
+window.addEventListener("keydown", (event) => {
+  if (!(event.ctrlKey || event.metaKey)) return;
+  if (event.key === "+" || event.key === "=") {
+    event.preventDefault();
+    zoomByStep(1);
+  } else if (event.key === "-" || event.key === "_") {
+    event.preventDefault();
+    zoomByStep(-1);
+  } else if (event.key === "0") {
+    event.preventDefault();
+    resetZoom();
+  }
+});
+
+let pageModeSyncTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(pageModeSyncTimer);
+  pageModeSyncTimer = setTimeout(syncPageModeButton, 220);
+});
 on("dialog-open-requested", handleOpenClick);
 on("open-requested", handleOpenRequested);
 
