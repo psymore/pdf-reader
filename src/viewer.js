@@ -476,19 +476,32 @@ async function rerenderPages({ animate = false, anchor = null } = {}) {
   pendingZoomAnchor = null;
 }
 
-export async function renderPdf(bytes) {
+// Releases the open PDF (page renders, observer, pending timers, the PDF.js
+// document) and clears the page area. Safe to call when nothing is open.
+export async function closePdf() {
+  clearTimeout(zoomDebounceTimer);
+  clearTimeout(resizeDebounceTimer);
   pageObserver?.disconnect();
+  pageObserver = null;
   cancelAllPageRenders();
   pagesWrapper.replaceChildren();
   const previousLoadingTask = pdfLoadingTask;
   pdfLoadingTask = null;
   pdfDoc = null;
   pages = [];
-  pageModePreference = null;
+  gesture = null;
+  pendingZoomAnchor = null;
+  renderedContentWidth = 0;
+  renderedContentHeight = 0;
   renderGeneration += 1;
   if (previousLoadingTask) {
     await previousLoadingTask.destroy();
   }
+}
+
+export async function renderPdf(bytes) {
+  await closePdf();
+  pageModePreference = null;
   try {
     pdfLoadingTask = pdfjsLib.getDocument({ data: bytes });
     pdfDoc = await pdfLoadingTask.promise;
