@@ -1,6 +1,10 @@
 import * as pdfjsLib from "./vendor/pdfjs/pdf.mjs";
 import { computeZoom } from "./zoom.js";
-import { computeFitZoom as fitZoomForPages, computePageColumns } from "./page-layout.js";
+import {
+  computeFitZoom as fitZoomForPages,
+  computePageColumns,
+  resolveDualPageMode,
+} from "./page-layout.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "./vendor/pdfjs/pdf.worker.mjs";
 
@@ -36,9 +40,7 @@ let fitZoom = 1;
 let gesture = null;
 
 function isDualPageMode() {
-  if (!pdfDoc || pdfDoc.numPages <= 1 || pageModePreference === "single") return false;
-  if (pageModePreference === "dual") return true;
-  return window.innerWidth > 1200;
+  return resolveDualPageMode(window.innerWidth, pdfDoc?.numPages ?? 0, pageModePreference);
 }
 
 function minimumZoom() {
@@ -202,11 +204,16 @@ function zoomAt(anchor, newZoom) {
 }
 
 export function togglePageMode() {
+  return setPageMode(isDualPageMode() ? "single" : "dual");
+}
+
+export function setPageMode(mode) {
+  if (mode !== "single" && mode !== "dual") return isSinglePageMode();
   const anchor = pdfDoc ? captureAnchor({
     x: container.clientWidth / 2,
     y: container.clientHeight / 2,
   }) : null;
-  const nextIsDual = !isDualPageMode();
+  const nextIsDual = mode === "dual";
   pageModePreference = nextIsDual ? "dual" : "single";
   if (pdfDoc) {
     computeFitZoom().then((nextFitZoom) => {

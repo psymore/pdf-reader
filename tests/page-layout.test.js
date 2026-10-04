@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeFitZoom, computePageColumns } from "../src/page-layout.js";
+import { computeFitZoom, computePageColumns, resolveDualPageMode } from "../src/page-layout.js";
 
 describe("computePageColumns", () => {
   it("always keeps a dual-page pair, even when it must overflow", () => {
@@ -31,5 +31,25 @@ describe("computeFitZoom", () => {
 
   it("falls back to 1 for unavailable dimensions", () => {
     expect(computeFitZoom(0, 400, 16, true)).toBe(1);
+  });
+});
+
+describe("resolveDualPageMode", () => {
+  it("defaults mobile and tablet widths to vertical scrolling", () => {
+    expect(resolveDualPageMode(390, 8)).toBe(false);
+    expect(resolveDualPageMode(1200, 8)).toBe(false);
+  });
+
+  it("defaults wide desktop windows to side-by-side pages", () => {
+    expect(resolveDualPageMode(1201, 8)).toBe(true);
+  });
+
+  it("respects an explicit layout choice", () => {
+    expect(resolveDualPageMode(390, 8, "dual")).toBe(true);
+    expect(resolveDualPageMode(1600, 8, "single")).toBe(false);
+  });
+
+  it("keeps a one-page document in vertical mode", () => {
+    expect(resolveDualPageMode(1600, 1, "dual")).toBe(false);
   });
 });

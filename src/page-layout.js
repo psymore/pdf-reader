@@ -10,3 +10,9 @@ export function computeFitZoom(availableWidth, pageWidth, gap, dualPageMode) {
   const columns = dualPageMode ? 2 : 1;
   return (availableWidth - gap * (columns - 1)) / (pageWidth * columns);
 }
+
+export function resolveDualPageMode(viewportWidth, pageCount, preference = null) {
+  if (pageCount <= 1 || preference === "single") return false;
+  if (preference === "dual") return true;
+  return viewportWidth > 1200;
+}

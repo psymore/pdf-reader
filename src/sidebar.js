@@ -161,16 +161,83 @@ function renderRow(entry) {
   });
   row.appendChild(label);
 
+  const actions = document.createElement("div");
+  actions.className = "sidebar-row-actions";
+
+  const copyBtn = document.createElement("button");
+  copyBtn.className = "sidebar-action-btn sidebar-copy-btn";
+  copyBtn.title = "Copy filename";
+  copyBtn.setAttribute("aria-label", `Copy filename ${entry.name}`);
+  copyBtn.innerHTML = `
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
+      <rect x="8" y="8" width="11" height="11" rx="2" />
+      <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+    </svg>`;
+  copyBtn.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    try {
+      await copyText(entry.name);
+      copyBtn.classList.add("copied");
+      copyBtn.title = "Filename copied";
+      copyBtn.setAttribute("aria-label", `Copied filename ${entry.name}`);
+      setTimeout(() => {
+        copyBtn.classList.remove("copied");
+        copyBtn.title = "Copy filename";
+        copyBtn.setAttribute("aria-label", `Copy filename ${entry.name}`);
+      }, 1200);
+    } catch {
+      copyBtn.title = "Could not copy filename";
+    }
+  });
+  actions.appendChild(copyBtn);
+
   const pinBtn = document.createElement("button");
-  pinBtn.className = "sidebar-pin-btn";
-  pinBtn.textContent = entry.pinned ? "★" : "☆"; // filled/outline star
+  pinBtn.className = "sidebar-action-btn sidebar-pin-btn";
+  pinBtn.innerHTML = entry.pinned
+    ? `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9z" /></svg>`
+    : `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9z" /></svg>`;
   pinBtn.title = entry.pinned ? "Unpin" : "Pin";
+  pinBtn.setAttribute("aria-label", `${entry.pinned ? "Unpin" : "Pin"} ${entry.name}`);
   pinBtn.addEventListener("click", async (event) => {
     event.stopPropagation();
     await invoke("toggle_pin", { path: entry.path });
     await refresh();
   });
-  row.appendChild(pinBtn);
+  actions.appendChild(pinBtn);
+
+  const removeBtn = document.createElement("button");
+  removeBtn.className = "sidebar-action-btn sidebar-remove-btn";
+  removeBtn.title = "Remove from list";
+  removeBtn.setAttribute("aria-label", `Remove ${entry.name} from the file list`);
+  removeBtn.innerHTML = `
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" />
+    </svg>`;
+  removeBtn.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    await invoke("remove_recent_entry", { path: entry.path });
+    await refresh();
+  });
+  actions.appendChild(removeBtn);
+  row.appendChild(actions);
 
   return row;
+}
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const input = document.createElement("textarea");
+  input.value = text;
+  input.setAttribute("readonly", "");
+  input.style.position = "fixed";
+  input.style.opacity = "0";
+  document.body.appendChild(input);
+  input.select();
+  const copied = document.execCommand("copy");
+  input.remove();
+  if (!copied) throw new Error("Copy failed");
 }

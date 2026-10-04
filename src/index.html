@@ -25,9 +25,13 @@
         </svg>
       </button>
       <button id="page-mode-btn" class="icon-btn" title="Toggle page layout" aria-label="Toggle between single and double page view" hidden>
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7V3z" />
-          <path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7V3z" />
+        <svg class="layout-icon layout-icon-vertical" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="5" y="2.5" width="14" height="8" rx="1.5" />
+          <rect x="5" y="13.5" width="14" height="8" rx="1.5" />
+        </svg>
+        <svg class="layout-icon layout-icon-side-by-side" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="2.5" y="4" width="8" height="16" rx="1.5" />
+          <rect x="13.5" y="4" width="8" height="16" rx="1.5" />
         </svg>
       </button>
       <button id="zoom-out-btn" class="icon-btn" title="Zoom out" aria-label="Zoom out" hidden>
@@ -53,6 +57,34 @@
         </svg>
       </button>
       <span id="app-title">PDF Reader</span>
+      <div id="toolbar-menu-wrap">
+        <button id="toolbar-menu-btn" class="icon-btn" title="View options" aria-label="View options" aria-haspopup="menu" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor" aria-hidden="true">
+            <circle cx="12" cy="5" r="1.7" />
+            <circle cx="12" cy="12" r="1.7" />
+            <circle cx="12" cy="19" r="1.7" />
+          </svg>
+        </button>
+        <div id="toolbar-menu" role="menu" aria-label="View options" hidden>
+          <div class="toolbar-menu-heading">Page layout</div>
+          <button class="layout-menu-option" data-page-layout="single" role="menuitemradio" aria-checked="true" disabled>
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <rect x="5" y="2.5" width="14" height="8" rx="1.5" />
+              <rect x="5" y="13.5" width="14" height="8" rx="1.5" />
+            </svg>
+            <span><strong>Vertical scroll</strong><small>Swipe freely through one page per row</small></span>
+            <span class="layout-option-check" aria-hidden="true">&#10003;</span>
+          </button>
+          <button class="layout-menu-option" data-page-layout="dual" role="menuitemradio" aria-checked="false" disabled>
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <rect x="2.5" y="4" width="8" height="16" rx="1.5" />
+              <rect x="13.5" y="4" width="8" height="16" rx="1.5" />
+            </svg>
+            <span><strong>Side by side</strong><small>Show pages next to each other</small></span>
+            <span class="layout-option-check" aria-hidden="true">&#10003;</span>
+          </button>
+        </div>
+      </div>
       <span id="status"></span>
       <div id="loading-indicator" hidden>
         <div class="spinner"></div>

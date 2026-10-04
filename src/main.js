@@ -1,4 +1,12 @@
-import { renderPdf, setStatusCallback, togglePageMode, isSinglePageMode, zoomByStep, resetZoom } from "./viewer.js";
+import {
+  renderPdf,
+  setStatusCallback,
+  togglePageMode,
+  setPageMode,
+  isSinglePageMode,
+  zoomByStep,
+  resetZoom,
+} from "./viewer.js";
 import { emit, on } from "./app-events.js";
 import { initSidebar } from "./sidebar.js";
 import { initEmptyState } from "./empty-state.js";
@@ -8,6 +16,10 @@ const { getCurrentWebview } = window.__TAURI__.webview;
 
 const openBtn = document.getElementById("open-btn");
 const pageModeBtn = document.getElementById("page-mode-btn");
+const toolbarMenuWrap = document.getElementById("toolbar-menu-wrap");
+const toolbarMenuBtn = document.getElementById("toolbar-menu-btn");
+const toolbarMenu = document.getElementById("toolbar-menu");
+const layoutMenuOptions = [...document.querySelectorAll("[data-page-layout]")];
 const zoomInBtn = document.getElementById("zoom-in-btn");
 const zoomOutBtn = document.getElementById("zoom-out-btn");
 const zoomResetBtn = document.getElementById("zoom-reset-btn");
@@ -34,7 +46,25 @@ function showEmptyState() {
 }
 
 function syncPageModeButton() {
-  pageModeBtn.classList.toggle("single-page-mode", isSinglePageMode());
+  const single = isSinglePageMode();
+  pageModeBtn.classList.toggle("layout-active", !single);
+  pageModeBtn.setAttribute("aria-pressed", String(!single));
+  pageModeBtn.setAttribute("aria-label", single ? "Switch to side-by-side pages" : "Switch to vertical scrolling");
+  pageModeBtn.title = single ? "Switch to side-by-side pages" : "Switch to vertical scrolling";
+  for (const option of layoutMenuOptions) {
+    const selected = option.dataset.pageLayout === (single ? "single" : "dual");
+    option.classList.toggle("selected", selected);
+    option.setAttribute("aria-checked", String(selected));
+  }
+}
+
+function setLayoutControlsEnabled(enabled) {
+  for (const option of layoutMenuOptions) option.disabled = !enabled;
+}
+
+function closeToolbarMenu() {
+  toolbarMenu.hidden = true;
+  toolbarMenuBtn.setAttribute("aria-expanded", "false");
 }
 
 async function openViaBytesResult(invokePromise) {
@@ -45,6 +75,7 @@ async function openViaBytesResult(invokePromise) {
     showViewer();
     await renderPdf(new Uint8Array(bytes));
     pageModeBtn.hidden = false;
+    setLayoutControlsEnabled(true);
     zoomInBtn.hidden = false;
     zoomOutBtn.hidden = false;
     zoomResetBtn.hidden = false;
@@ -84,6 +115,7 @@ async function handleOpenRequested({ path }) {
     showViewer();
     await renderPdf(new Uint8Array(bytes));
     pageModeBtn.hidden = false;
+    setLayoutControlsEnabled(true);
     zoomInBtn.hidden = false;
     zoomOutBtn.hidden = false;
     zoomResetBtn.hidden = false;
@@ -101,6 +133,24 @@ openBtn.addEventListener("click", handleOpenClick);
 pageModeBtn.addEventListener("click", () => {
   togglePageMode();
   syncPageModeButton();
+});
+toolbarMenuBtn.addEventListener("click", () => {
+  const opening = toolbarMenu.hidden;
+  toolbarMenu.hidden = !opening;
+  toolbarMenuBtn.setAttribute("aria-expanded", String(opening));
+});
+for (const option of layoutMenuOptions) {
+  option.addEventListener("click", () => {
+    setPageMode(option.dataset.pageLayout);
+    syncPageModeButton();
+    closeToolbarMenu();
+  });
+}
+document.addEventListener("pointerdown", (event) => {
+  if (!toolbarMenu.hidden && !toolbarMenuWrap.contains(event.target)) closeToolbarMenu();
+});
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeToolbarMenu();
 });
 zoomInBtn.addEventListener("click", () => zoomByStep(1));
 zoomOutBtn.addEventListener("click", () => zoomByStep(-1));
