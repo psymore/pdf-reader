@@ -37,6 +37,13 @@
         "description": "PDF Document",
         "role": "Viewer",
         "mimeType": "application/pdf"
+      },
+      {
+        "ext": ["docx"],
+        "name": "Word Document",
+        "description": "Word Document",
+        "role": "Viewer",
+        "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
       }
     ]
   }

@@ -8,8 +8,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
-            commands::open_pdf_file,
-            commands::open_pdf_path,
+            commands::open_document_file,
+            commands::open_document_path,
             commands::get_launch_path,
             commands::get_recent_files,
             commands::toggle_pin,

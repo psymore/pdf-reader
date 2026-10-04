@@ -5,7 +5,18 @@ use std::path::Path;
 use tauri::Manager;
 use tauri_plugin_fs::{FilePath, FsExt, OpenOptions};
 
-pub fn read_pdf_bytes(path: &Path) -> Result<Vec<u8>, String> {
+/// File extensions the app can open (lowercase, no dot).
+pub const SUPPORTED_EXTENSIONS: &[&str] = &["pdf", "docx"];
+
+/// True when `path` ends in one of `SUPPORTED_EXTENSIONS`, ignoring case.
+pub fn is_supported_document(path: &str) -> bool {
+    let lower = path.to_lowercase();
+    SUPPORTED_EXTENSIONS
+        .iter()
+        .any(|ext| lower.ends_with(&format!(".{ext}")))
+}
+
+pub fn read_file_bytes(path: &Path) -> Result<Vec<u8>, String> {
     fs::read(path).map_err(|e| format!("Failed to read file: {e}"))
 }
 
@@ -17,12 +28,13 @@ fn file_name_or_path(app: &tauri::AppHandle, file_path: &FilePath) -> Result<Str
         .ok_or_else(|| "Could not retrieve the document name from file metadata".to_string())
 }
 
-/// Reads a PDF's bytes — via a direct filesystem read for a regular path, or
-/// via the fs plugin's Android content-resolver bridge for a `content://`
-/// URI (what the native file picker returns on Android/scoped storage).
+/// Reads a document's bytes — via a direct filesystem read for a regular
+/// path, or via the fs plugin's Android content-resolver bridge for a
+/// `content://` URI (what the native file picker returns on Android/scoped
+/// storage).
 fn read_bytes(app: &tauri::AppHandle, file_path: &FilePath) -> Result<Vec<u8>, String> {
     if let Some(path) = file_path.as_path() {
-        return read_pdf_bytes(path);
+        return read_file_bytes(path);
     }
 
     let mut file = app
@@ -35,9 +47,11 @@ fn read_bytes(app: &tauri::AppHandle, file_path: &FilePath) -> Result<Vec<u8>, S
     Ok(bytes)
 }
 
-/// Reads a PDF's bytes, records it in the recent-files list, and returns
-/// the bytes as an IPC response. Shared by both `open_pdf_file` (native
-/// dialog) and `open_pdf_path` (drag-drop / sidebar reopen).
+/// Reads a document's bytes, records it in the recent-files list, and
+/// returns the bytes as an IPC response. Shared by both
+/// `open_document_file` (native dialog) and `open_document_path`
+/// (drag-drop / sidebar reopen / launch path). The frontend decides from
+/// the bytes whether it is a PDF or a Word file.
 fn open_filepath_and_record(
     app: &tauri::AppHandle,
     file_path: FilePath,
@@ -60,13 +74,13 @@ fn open_filepath_and_record(
 }
 
 #[tauri::command]
-pub async fn open_pdf_file(app: tauri::AppHandle) -> Result<tauri::ipc::Response, String> {
+pub async fn open_document_file(app: tauri::AppHandle) -> Result<tauri::ipc::Response, String> {
     use tauri_plugin_dialog::DialogExt;
 
     let file_path = app
         .dialog()
         .file()
-        .add_filter("PDF", &["pdf"])
+        .add_filter("PDF or Word document", SUPPORTED_EXTENSIONS)
         .blocking_pick_file();
 
     match file_path {
@@ -76,7 +90,7 @@ pub async fn open_pdf_file(app: tauri::AppHandle) -> Result<tauri::ipc::Response
 }
 
 #[tauri::command]
-pub async fn open_pdf_path(
+pub async fn open_document_path(
     app: tauri::AppHandle,
     path: String,
 ) -> Result<tauri::ipc::Response, String> {
@@ -84,13 +98,14 @@ pub async fn open_pdf_path(
     open_filepath_and_record(&app, file_path)
 }
 
-/// Returns the PDF path passed on the command line, if any — this is how
-/// Windows launches the app for "Open with" / file-association double-click.
+/// Returns the document path passed on the command line, if any — this is
+/// how Windows launches the app for "Open with" / file-association
+/// double-click.
 #[tauri::command]
 pub fn get_launch_path() -> Option<String> {
     std::env::args()
         .skip(1)
-        .find(|arg| arg.to_lowercase().ends_with(".pdf"))
+        .find(|arg| is_supported_document(arg))
 }
 
 #[tauri::command]
@@ -129,7 +144,7 @@ mod tests {
         let mut f = fs::File::create(&tmp).unwrap();
         f.write_all(b"%PDF-1.4 test bytes").unwrap();
 
-        let result = read_pdf_bytes(&tmp).unwrap();
+        let result = read_file_bytes(&tmp).unwrap();
         assert_eq!(result, b"%PDF-1.4 test bytes");
 
         fs::remove_file(&tmp).unwrap();
@@ -138,7 +153,24 @@ mod tests {
     #[test]
     fn errors_on_missing_file() {
         let missing = Path::new("this_file_does_not_exist_pdf_reader.pdf");
-        let result = read_pdf_bytes(missing);
+        let result = read_file_bytes(missing);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn accepts_pdf_and_docx_in_any_case() {
+        assert!(is_supported_document("a.pdf"));
+        assert!(is_supported_document("C:\\Docs\\Report.PDF"));
+        assert!(is_supported_document("/home/me/notes.docx"));
+        assert!(is_supported_document("Notes.DocX"));
+    }
+
+    #[test]
+    fn rejects_other_files() {
+        assert!(!is_supported_document("old.doc"));
+        assert!(!is_supported_document("archive.docx.zip"));
+        assert!(!is_supported_document("docx"));
+        assert!(!is_supported_document("--flag"));
+        assert!(!is_supported_document(""));
     }
 }

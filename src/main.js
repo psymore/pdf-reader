@@ -91,7 +91,7 @@ async function openViaBytesResult(invokePromise) {
 }
 
 async function handleOpenClick() {
-  await openViaBytesResult(invoke("open_pdf_file"));
+  await openViaBytesResult(invoke("open_document_file"));
 }
 
 async function handleOpenRequested({ path }) {
@@ -99,7 +99,7 @@ async function handleOpenRequested({ path }) {
   loadingIndicator.hidden = false;
   let bytes;
   try {
-    bytes = await invoke("open_pdf_path", { path });
+    bytes = await invoke("open_document_path", { path });
   } catch (err) {
     setStatus(`Error: ${err}`);
     loadingIndicator.hidden = true;
