@@ -1,5 +1,6 @@
 import {
   renderPdf,
+  closePdf,
   setStatusCallback,
   togglePageMode,
   setPageMode,
@@ -7,6 +8,8 @@ import {
   zoomByStep,
   resetZoom,
 } from "./viewer.js";
+import { renderDocx, closeDocx, zoomDocxByStep, resetDocxZoom } from "./docx-viewer.js";
+import { detectDocumentKind, pickDroppedPath, LEGACY_DOC_MESSAGE } from "./document-kind.js";
 import { emit, on } from "./app-events.js";
 import { initSidebar } from "./sidebar.js";
 import { initEmptyState } from "./empty-state.js";
@@ -27,6 +30,13 @@ const status = document.getElementById("status");
 const loadingIndicator = document.getElementById("loading-indicator");
 const emptyState = document.getElementById("empty-state");
 const viewerContainer = document.getElementById("viewer-container");
+const docxContainer = document.getElementById("docx-container");
+
+// "pdf" | "docx" | null — which viewer currently shows a document.
+let activeKind = null;
+// Bumped on every open, so a slow render that finishes after a newer open
+// started can tell it was superseded and leave the UI alone.
+let openSequence = 0;
 
 function setStatus(message) {
   status.textContent = message;
@@ -35,14 +45,22 @@ function setStatus(message) {
 
 setStatusCallback(setStatus);
 
-function showViewer() {
+function showViewer(kind) {
   emptyState.hidden = true;
-  viewerContainer.hidden = false;
+  viewerContainer.hidden = kind !== "pdf";
+  docxContainer.hidden = kind !== "docx";
 }
 
 function showEmptyState() {
   emptyState.hidden = false;
   viewerContainer.hidden = true;
+  docxContainer.hidden = true;
+  activeKind = null;
+  syncToolbarForKind(null);
+  closeDocx();
+  closePdf().catch(() => {
+    // best-effort release; nothing is shown either way
+  });
 }
 
 function syncPageModeButton() {
@@ -62,9 +80,49 @@ function setLayoutControlsEnabled(enabled) {
   for (const option of layoutMenuOptions) option.disabled = !enabled;
 }
 
+// Page layout (side-by-side) only applies to PDFs; zoom applies to both.
+function syncToolbarForKind(kind) {
+  pageModeBtn.hidden = kind !== "pdf";
+  setLayoutControlsEnabled(kind === "pdf");
+  zoomInBtn.hidden = kind === null;
+  zoomOutBtn.hidden = kind === null;
+  zoomResetBtn.hidden = kind === null;
+  if (kind === "pdf") syncPageModeButton();
+}
+
 function closeToolbarMenu() {
   toolbarMenu.hidden = true;
   toolbarMenuBtn.setAttribute("aria-expanded", "false");
+}
+
+// Renders a file's bytes in the viewer that matches its contents (not its
+// name — Android content:// URIs have none). Returns false when a newer open
+// superseded this one mid-render; the caller must then leave the UI alone.
+async function showDocument(bytes) {
+  const sequence = ++openSequence;
+  const data = new Uint8Array(bytes);
+  // Unrecognized bytes go to PDF.js, which reports its own precise error.
+  const kind = detectDocumentKind(data) ?? "pdf";
+  if (kind === "doc") throw LEGACY_DOC_MESSAGE;
+  activeKind = null;
+  try {
+    if (kind === "docx") {
+      await closePdf();
+      showViewer("docx");
+      await renderDocx(data);
+    } else {
+      closeDocx();
+      showViewer("pdf");
+      await renderPdf(data);
+    }
+  } catch (err) {
+    if (sequence !== openSequence) return false;
+    throw err;
+  }
+  if (sequence !== openSequence) return false;
+  activeKind = kind;
+  syncToolbarForKind(kind);
+  return true;
 }
 
 async function openViaBytesResult(invokePromise) {
@@ -72,15 +130,7 @@ async function openViaBytesResult(invokePromise) {
   loadingIndicator.hidden = false;
   try {
     const bytes = await invokePromise;
-    showViewer();
-    await renderPdf(new Uint8Array(bytes));
-    pageModeBtn.hidden = false;
-    setLayoutControlsEnabled(true);
-    zoomInBtn.hidden = false;
-    zoomOutBtn.hidden = false;
-    zoomResetBtn.hidden = false;
-    syncPageModeButton();
-    emit("file-opened", null);
+    if (await showDocument(bytes)) emit("file-opened", null);
   } catch (err) {
     if (err === "cancelled") return;
     setStatus(`Error: ${err}`);
@@ -112,21 +162,23 @@ async function handleOpenRequested({ path }) {
     return;
   }
   try {
-    showViewer();
-    await renderPdf(new Uint8Array(bytes));
-    pageModeBtn.hidden = false;
-    setLayoutControlsEnabled(true);
-    zoomInBtn.hidden = false;
-    zoomOutBtn.hidden = false;
-    zoomResetBtn.hidden = false;
-    syncPageModeButton();
-    emit("file-opened", { path });
+    if (await showDocument(bytes)) emit("file-opened", { path });
   } catch (err) {
     setStatus(`Error: ${err}`);
     showEmptyState(); // don't strand the UI on a blank viewer pane
   } finally {
     loadingIndicator.hidden = true;
   }
+}
+
+function zoomActiveByStep(direction) {
+  if (activeKind === "docx") zoomDocxByStep(direction);
+  else zoomByStep(direction);
+}
+
+function resetActiveZoom() {
+  if (activeKind === "docx") resetDocxZoom();
+  else resetZoom();
 }
 
 openBtn.addEventListener("click", handleOpenClick);
@@ -152,21 +204,21 @@ document.addEventListener("pointerdown", (event) => {
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeToolbarMenu();
 });
-zoomInBtn.addEventListener("click", () => zoomByStep(1));
-zoomOutBtn.addEventListener("click", () => zoomByStep(-1));
-zoomResetBtn.addEventListener("click", () => resetZoom());
+zoomInBtn.addEventListener("click", () => zoomActiveByStep(1));
+zoomOutBtn.addEventListener("click", () => zoomActiveByStep(-1));
+zoomResetBtn.addEventListener("click", () => resetActiveZoom());
 
 window.addEventListener("keydown", (event) => {
   if (!(event.ctrlKey || event.metaKey)) return;
   if (event.key === "+" || event.key === "=") {
     event.preventDefault();
-    zoomByStep(1);
+    zoomActiveByStep(1);
   } else if (event.key === "-" || event.key === "_") {
     event.preventDefault();
-    zoomByStep(-1);
+    zoomActiveByStep(-1);
   } else if (event.key === "0") {
     event.preventDefault();
-    resetZoom();
+    resetActiveZoom();
   }
 });
 
@@ -192,13 +244,12 @@ getCurrentWebview().onDragDropEvent((event) => {
     document.body.classList.add("drag-active");
   } else if (type === "drop") {
     document.body.classList.remove("drag-active");
-    const paths = event.payload.paths || [];
-    const pdfPath = paths.find((p) => p.toLowerCase().endsWith(".pdf"));
-    if (!pdfPath) {
-      setStatus("Please drop a PDF file.");
+    const dropped = pickDroppedPath(event.payload.paths || []);
+    if (dropped.error) {
+      setStatus(dropped.error);
       return;
     }
-    handleOpenRequested({ path: pdfPath });
+    handleOpenRequested({ path: dropped.path });
   } else {
     document.body.classList.remove("drag-active");
   }

@@ -622,3 +622,48 @@ body.drag-active #empty-state #empty-state-text {
     pointer-events: auto;
   }
 }
+
+/* Word documents: native scrolling (unlike #viewer-container, which drives
+   pan/zoom itself). Zoom is CSS `zoom` on #docx-pages, set in
+   docx-viewer.js, so scroll extents follow the zoomed size automatically. */
+#docx-container {
+  height: 100%;
+  overflow: auto;
+  padding: 24px 16px 64px;
+  overscroll-behavior: contain;
+  /* browser scrolls; two-finger pinch is handled in docx-viewer.js */
+  touch-action: pan-x pan-y;
+}
+
+#docx-container[hidden] {
+  display: none;
+}
+
+/* max-content + auto margins centers narrow pages but lets wide (zoomed)
+   pages overflow to the right, so the left edge is always reachable by
+   scrolling — flex centering would clip it. */
+#docx-pages {
+  width: max-content;
+  margin: 0 auto;
+}
+
+/* Override docx-preview's own grey wrapper so pages sit on the app canvas. */
+#docx-pages .docx-wrapper {
+  background: transparent;
+  padding: 0;
+}
+
+#docx-pages .docx-wrapper > section.docx {
+  margin-bottom: 16px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+@media (max-width: 640px) {
+  #docx-container {
+    padding: 12px 12px 64px;
+  }
+
+  #docx-pages .docx-wrapper > section.docx {
+    margin-bottom: 12px;
+  }
+}
