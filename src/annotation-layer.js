@@ -91,7 +91,8 @@ export function createAnnotationLayerController({ store, onStatus = () => {} }) 
     };
 
     surface.addEventListener("pointerdown", (event) => {
-      if (!tool) return;
+      // Only the primary button marks; the middle button is autoscroll.
+      if (!tool || event.button !== 0) return;
       active.add(event.pointerId);
       // A second finger means pinch-zoom: abandon the mark in progress.
       if (active.size > 1) { poisoned = true; cancel(); return; }
