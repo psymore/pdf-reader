@@ -10,6 +10,12 @@ function svgEl(name, attrs = {}) {
   return el;
 }
 
+function pathData(points) {
+  const d = points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x} ${p.y}`).join(" ");
+  // A lone point needs a zero-length segment so the round cap draws a dot.
+  return points.length === 1 ? `${d} L${points[0].x} ${points[0].y}` : d;
+}
+
 function renderMark(mark) {
   if (mark.type === "highlight") {
     const g = svgEl("g", { fill: mark.color, "fill-opacity": 0.4, "data-mark": mark.id });
@@ -18,10 +24,8 @@ function renderMark(mark) {
     return g;
   }
   if (mark.type === "ink") {
-    const d = mark.points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x} ${p.y}`).join(" ");
-    const single = mark.points.length === 1 ? ` L${mark.points[0].x} ${mark.points[0].y}` : "";
     return svgEl("path", {
-      d: d + single, fill: "none", stroke: mark.color, "stroke-width": mark.width,
+      d: pathData(mark.points), fill: "none", stroke: mark.color, "stroke-width": mark.width,
       "stroke-linecap": "round", "stroke-linejoin": "round", "data-mark": mark.id,
     });
   }
@@ -76,10 +80,12 @@ export function createAnnotationLayerController({ store, onStatus = () => {} }) 
     const active = new Set(); // pointer ids currently down on this surface
     let poisoned = false; // multi-touch seen: no mark until every pointer is released
     let stroke = null; // { points }
+    let notePoint = null; // note tool: placed on release, not on press
     let moveHandler = null; // set by tool-specific logic (Task 6 adds highlight)
 
     const cancel = () => {
       stroke = null;
+      notePoint = null;
       moveHandler = null;
       if (info.preview) { info.preview.remove(); info.preview = null; }
     };
@@ -99,7 +105,9 @@ export function createAnnotationLayerController({ store, onStatus = () => {} }) 
         info.svg.append(info.preview);
         surface.setPointerCapture?.(event.pointerId);
       } else if (tool === "note") {
-        placeNote(info, pageNumber, point);
+        // Opening the textarea on press would lose focus to the press's own
+        // default action (and fire on the first finger of a pinch).
+        notePoint = point;
       } else if (tool === "eraser") {
         eraseAt(pageNumber, point);
         stroke = { points: [point] };
@@ -114,7 +122,7 @@ export function createAnnotationLayerController({ store, onStatus = () => {} }) 
       const point = toPage(info, event);
       if (tool === "ink" && stroke) {
         stroke.points.push(point);
-        info.preview.setAttribute("d", stroke.points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x} ${p.y}`).join(" "));
+        info.preview.setAttribute("d", pathData(stroke.points));
       } else if (tool === "eraser" && stroke) {
         eraseAt(pageNumber, point);
       } else if (moveHandler) {
@@ -129,6 +137,8 @@ export function createAnnotationLayerController({ store, onStatus = () => {} }) 
         if (ok && tool === "ink" && stroke) {
           const points = simplifyPath(stroke.points);
           store.add({ type: "ink", page: pageNumber, color, width: INK_WIDTH, points });
+        } else if (ok && tool === "note" && notePoint) {
+          placeNote(info, pageNumber, notePoint);
         } else if (ok && moveHandler) {
           info.endHighlight?.();
         }
