@@ -47,6 +47,10 @@ let fitZoom = 1;
 let gesture = null;
 let flingFrame = 0;
 let panVelocity = null; // { vx, vy, time } from the latest touchmove, px/ms
+let pageRenderedHook = null;
+let pageUnloadedHook = null;
+let documentChangeHook = null;
+let panEnabled = true;
 
 function isDualPageMode() {
   return resolveDualPageMode(window.innerWidth, pdfDoc?.numPages ?? 0, pageModePreference);
@@ -303,6 +307,27 @@ export function setStatusCallback(fn) {
   statusCallback = fn;
 }
 
+export function setPageRenderedHook(fn) {
+  pageRenderedHook = fn;
+}
+
+export function setPageUnloadedHook(fn) {
+  pageUnloadedHook = fn;
+}
+
+export function setDocumentChangeHook(fn) {
+  documentChangeHook = fn;
+}
+
+export function setPanEnabled(enabled) {
+  panEnabled = enabled;
+  if (!enabled) stopFling();
+}
+
+export function getOpenPdf() {
+  return pdfDoc ? { doc: pdfDoc, numPages: pdfDoc.numPages } : null;
+}
+
 function computeColumns(targetZoom) {
   const widestPage = Math.max(...pages.map((page) => page.width));
   const columns = computePageColumns(
@@ -406,6 +431,7 @@ function unloadPage(page) {
   page.canvas.height = 0;
   page.slot.replaceChildren();
   page.canvas = null;
+  pageUnloadedHook?.(page.pageNumber);
 }
 
 async function renderPage(page, generation) {
@@ -462,6 +488,18 @@ async function renderPage(page, generation) {
           page.slot?.replaceChildren();
         }
       }
+    }
+
+    if (generation === renderGeneration && token === page.renderToken && page.canvas === canvas) {
+      pageRenderedHook?.({
+        pageNumber: page.pageNumber,
+        width: page.width,
+        height: page.height,
+        slot: page.slot,
+        viewport,
+        pageProxy,
+        renderedZoom,
+      });
     }
   } finally {
     if (token === page.renderToken) page.rendering = false;
@@ -531,6 +569,7 @@ export async function closePdf() {
   const previousLoadingTask = pdfLoadingTask;
   pdfLoadingTask = null;
   pdfDoc = null;
+  documentChangeHook?.("closed");
   pages = [];
   gesture = null;
   pendingZoomAnchor = null;
@@ -604,6 +643,7 @@ export async function renderPdf(bytes) {
     panX = 0;
     panY = 0;
     await rerenderPages({ animate: true });
+    if (token === loadToken) documentChangeHook?.("opened");
   } catch (err) {
     if (token !== loadToken) {
       // closePdf() already cleared this load; the state now belongs to the
@@ -666,7 +706,9 @@ function distance(a, b) {
 
 function beginGesture(touches) {
   if (touches.length === 1) {
-    gesture = { kind: "pan", start: touchPoint(touches[0]), startPanX: panX, startPanY: panY };
+    gesture = panEnabled
+      ? { kind: "pan", start: touchPoint(touches[0]), startPanX: panX, startPanY: panY }
+      : { kind: "idle" };
   } else if (touches.length === 2) {
     const first = touchPoint(touches[0]);
     const second = touchPoint(touches[1]);
@@ -726,7 +768,7 @@ container.addEventListener("touchmove", (event) => {
     panX = mid.x - contentX * zoomLevel;
     panY = mid.y - pagesWrapper.offsetTop - contentY * zoomLevel;
     updateView();
-  } else {
+  } else if (gesture.kind !== "idle") {
     beginGesture(event.touches);
   }
 }, { passive: false });

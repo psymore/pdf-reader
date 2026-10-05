@@ -466,6 +466,7 @@ body.drag-active #empty-state #empty-state-text {
 }
 
 .pdf-page-slot {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
