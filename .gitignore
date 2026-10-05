@@ -28,3 +28,4 @@ local.properties
 
 # Build script outputs (npm run build:*)
 release/
+.playwright-mcp/
