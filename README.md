@@ -36,9 +36,22 @@ natively scrolling pane separate from the PDF viewer. Files are routed by
 their first bytes, not their extension (Android `content://` URIs have
 none); legacy `.doc` files are rejected with a message. Pages open at 100%,
 shrunk to fit narrow screens; zoom uses CSS `zoom`. Links inside a document
-never navigate the app; bookmark links scroll within it. Embedded HTML (altChunk) content is not rendered, because docx-preview would place it in an unsandboxed iframe with the app's origin. Layout is an
-approximation of Word's — complex text boxes, SmartArt and missing fonts may
-differ.
+never navigate the app; bookmark links scroll within it. Embedded HTML
+(altChunk) content is not rendered, because docx-preview would place it in an
+unsandboxed iframe with the app's origin. Layout is an approximation of
+Word's — complex text boxes, SmartArt and missing fonts may differ.
+
+Known limitations:
+
+- No Content Security Policy is configured yet (`csp: null`). docx-preview
+  pastes document values into CSS unescaped, so a crafted `.docx` can make the
+  app request remote URLs (e.g. a tracking image) and restyle the app UI while
+  it is open. It cannot run script. The proposed fix is
+  `"csp": "img-src 'self' data: blob:; font-src 'self' data: blob:; media-src 'self' data: blob:"`
+  with `"dangerousDisableAssetCspModification": true` in
+  `src-tauri/tauri.conf.json`; it needs a smoke test of both viewers.
+- Password-protected (encrypted) `.docx` files are stored in the same
+  container format as legacy `.doc`, so they get the legacy `.doc` message.
 
 To update the vendored Word libraries:
 
