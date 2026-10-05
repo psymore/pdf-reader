@@ -13,6 +13,20 @@ Project-specific instructions for Claude Code when working in this repo.
   out normally, so the user can see changes in their working tree as they
   happen.
 
+## Builds
+
+When the user asks for a build, run the build script instead of calling
+`tauri build` / `tauri android build` directly. It runs the tests, keeps the
+full output in `release/logs/<target>.log`, prints only a one-line result
+(and the log tail on failure), and copies the artifact into `release/`:
+
+- Desktop (Windows installer): `npm run build:desktop`
+- Mobile (Android arm64 APK): `npm run build:android`
+  (add `-- --install` to also install it on a phone shown by `adb devices`)
+
+Only open the log file when the build failed and the printed tail is not
+enough to see why.
+
 ## CMP rule
 
 When the user says **"CMP"**, it means: **C**ommit, **M**erge, **P**ush branch.
