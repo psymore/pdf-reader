@@ -37,6 +37,8 @@ let renderGeneration = 0;
 let resizeTimer = null;
 let pinch = null;
 let pinchFrame = 0;
+let wheelZoom = null; // { zoom, x, y } waiting for the next animation frame
+let wheelFrame = 0;
 
 function availableWidth() {
   const style = getComputedStyle(container);
@@ -112,6 +114,9 @@ export function closeDocx() {
   pinch = null;
   cancelAnimationFrame(pinchFrame);
   pinchFrame = 0;
+  cancelAnimationFrame(wheelFrame);
+  wheelFrame = 0;
+  wheelZoom = null;
   zoomLevel = 1;
   fitZoom = 1;
   naturalPageWidth = 0;
@@ -137,12 +142,23 @@ container.addEventListener(
     // plain wheel/trackpad scrolling stays native
     if (!loaded || !(event.ctrlKey || event.metaKey)) return;
     event.preventDefault();
+    // CSS zoom re-lays out the document, so like pinch at most one zoom is
+    // applied per animation frame. Each event builds on the pending target,
+    // so a fast burst (precision touchpads) still adds up.
     const point = containerPoint(event.clientX, event.clientY);
-    setZoom(
-      computeZoom(zoomLevel, event.deltaY, { min: DOCX_MIN_ZOOM, max: DOCX_MAX_ZOOM }),
-      point.x,
-      point.y
-    );
+    const base = wheelZoom ? wheelZoom.zoom : zoomLevel;
+    wheelZoom = {
+      zoom: computeZoom(base, event.deltaY, { min: DOCX_MIN_ZOOM, max: DOCX_MAX_ZOOM }),
+      x: point.x,
+      y: point.y,
+    };
+    if (wheelFrame) return;
+    wheelFrame = requestAnimationFrame(() => {
+      wheelFrame = 0;
+      const next = wheelZoom;
+      wheelZoom = null;
+      if (next) setZoom(next.zoom, next.x, next.y);
+    });
   },
   { passive: false }
 );
@@ -155,8 +171,16 @@ container.addEventListener("click", (event) => {
   event.preventDefault();
   const href = link.getAttribute("href") ?? "";
   if (!href.startsWith("#") || href.length < 2) return;
-  const target = document.getElementById(decodeURIComponent(href.slice(1)));
-  if (target && pagesEl.contains(target)) target.scrollIntoView({ block: "start" });
+  let id = href.slice(1);
+  try {
+    id = decodeURIComponent(id);
+  } catch {
+    // malformed %-escape: look the bookmark up by its raw name
+  }
+  // searched inside the document only, so an app element that happens to
+  // share the id (toolbar, status, ...) can't shadow the bookmark
+  const target = pagesEl.querySelector(`[id="${CSS.escape(id)}"]`);
+  if (target) target.scrollIntoView({ block: "start" });
 });
 
 window.addEventListener("resize", () => {
