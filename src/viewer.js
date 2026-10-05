@@ -18,6 +18,11 @@ const DESKTOP_PAGE_GAP = 16;
 const MOBILE_PAGE_GAP = 12;
 const RESIZE_SETTLE_DELAY = 150;
 const ZOOM_RERENDER_DELAY = 120;
+// Momentum scrolling after a touch pan: velocity decays exponentially.
+const FLING_TIME_CONSTANT = 325; // ms; larger = longer glide
+const FLING_MIN_SPEED = 0.02; // px/ms below which the glide stops
+const FLING_MAX_SPEED = 6; // px/ms cap so a flick can't launch the page
+const FLING_STALE_MS = 80; // finger paused longer than this before lift = no glide
 const PAGE_METADATA_BATCH_SIZE = 16;
 
 let pdfDoc = null;
@@ -40,6 +45,8 @@ let pageObserver = null;
 let pendingZoomAnchor = null;
 let fitZoom = 1;
 let gesture = null;
+let flingFrame = 0;
+let panVelocity = null; // { vx, vy, time } from the latest touchmove, px/ms
 
 function isDualPageMode() {
   return resolveDualPageMode(window.innerWidth, pdfDoc?.numPages ?? 0, pageModePreference);
@@ -100,6 +107,37 @@ function clampPan() {
   panY = height <= usableHeight
     ? (usableHeight - height) / 2
     : Math.min(0, Math.max(usableHeight - height, panY));
+}
+
+function stopFling() {
+  cancelAnimationFrame(flingFrame);
+  flingFrame = 0;
+}
+
+function startFling(vx, vy) {
+  stopFling();
+  let lastTime = performance.now();
+  const step = (now) => {
+    const dt = Math.min(now - lastTime, 50);
+    lastTime = now;
+    const decay = Math.exp(-dt / FLING_TIME_CONSTANT);
+    vx *= decay;
+    vy *= decay;
+    const beforeX = panX;
+    const beforeY = panY;
+    panX += vx * dt;
+    panY += vy * dt;
+    updateView();
+    // Hitting an edge kills the velocity on that axis (clampPan moved us back).
+    if (panX !== beforeX + vx * dt) vx = 0;
+    if (panY !== beforeY + vy * dt) vy = 0;
+    if (Math.hypot(vx, vy) < FLING_MIN_SPEED) {
+      flingFrame = 0;
+      return;
+    }
+    flingFrame = requestAnimationFrame(step);
+  };
+  flingFrame = requestAnimationFrame(step);
 }
 
 function applyTransform() {
@@ -195,6 +233,7 @@ function restoreAnchor(anchor, targetZoom) {
 }
 
 function zoomAt(anchor, newZoom) {
+  stopFling();
   const capturedAnchor = captureAnchor(anchor);
   const clampedZoom = Math.min(MAX_ZOOM, Math.max(minimumZoom(), newZoom));
   const contentX = (anchor.x - panX) / zoomLevel;
@@ -481,6 +520,7 @@ async function rerenderPages({ animate = false, anchor = null } = {}) {
 // Releases the open PDF (page renders, observer, pending timers, the PDF.js
 // document) and clears the page area. Safe to call when nothing is open.
 export async function closePdf() {
+  stopFling();
   loadToken += 1;
   clearTimeout(zoomDebounceTimer);
   clearTimeout(resizeDebounceTimer);
@@ -600,6 +640,7 @@ container.addEventListener(
   (event) => {
     event.preventDefault();
     if (!pdfDoc) return;
+    stopFling();
     if (event.ctrlKey || event.metaKey) {
       zoomByWheel(event);
     } else {
@@ -644,6 +685,8 @@ function beginGesture(touches) {
 
 container.addEventListener("touchstart", (event) => {
   if (!pdfDoc) return;
+  stopFling(); // a touch catches the gliding page, like native scrolling
+  panVelocity = null;
   beginGesture(event.touches);
 }, { passive: true });
 
@@ -653,9 +696,23 @@ container.addEventListener("touchmove", (event) => {
 
   if (gesture.kind === "pan" && event.touches.length === 1) {
     const point = touchPoint(event.touches[0]);
+    const prevX = panX;
+    const prevY = panY;
     panX = gesture.startPanX + point.x - gesture.start.x;
     panY = gesture.startPanY + point.y - gesture.start.y;
     updateView();
+    const now = performance.now();
+    if (panVelocity && now > panVelocity.time) {
+      const dt = now - panVelocity.time;
+      // light smoothing so one jittery sample doesn't decide the fling
+      panVelocity = {
+        vx: 0.4 * panVelocity.vx + 0.6 * ((panX - prevX) / dt),
+        vy: 0.4 * panVelocity.vy + 0.6 * ((panY - prevY) / dt),
+        time: now,
+      };
+    } else if (!panVelocity) {
+      panVelocity = { vx: 0, vy: 0, time: now };
+    }
   } else if (gesture.kind === "pinch" && event.touches.length === 2) {
     const first = touchPoint(event.touches[0]);
     const second = touchPoint(event.touches[1]);
@@ -683,8 +740,17 @@ function commitZoom() {
 
 container.addEventListener("touchend", (event) => {
   const wasZooming = gesture?.kind === "pinch";
+  const wasPanning = gesture?.kind === "pan";
   if (event.touches.length === 0) {
     gesture = null;
+    if (wasPanning && panVelocity && performance.now() - panVelocity.time < FLING_STALE_MS) {
+      const speed = Math.hypot(panVelocity.vx, panVelocity.vy);
+      if (speed > FLING_MIN_SPEED) {
+        const k = Math.min(1, FLING_MAX_SPEED / speed);
+        startFling(panVelocity.vx * k, panVelocity.vy * k);
+      }
+    }
+    panVelocity = null;
   } else {
     beginGesture(event.touches);
   }
@@ -692,6 +758,7 @@ container.addEventListener("touchend", (event) => {
 });
 
 container.addEventListener("touchcancel", () => {
+  panVelocity = null;
   const wasZooming = gesture?.kind === "pinch";
   gesture = null;
   if (wasZooming) commitZoom();
