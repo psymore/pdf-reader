@@ -4,6 +4,7 @@ import {
   DOCX_MIN_ZOOM,
   clampDocxZoom,
   fitDocxZoom,
+  pinchDocxZoom,
   stepDocxZoom,
 } from "./docx-zoom.js";
 
@@ -35,6 +36,7 @@ let naturalPageWidth = 0;
 let renderGeneration = 0;
 let resizeTimer = null;
 let pinch = null;
+let pinchFrame = 0;
 
 function availableWidth() {
   const style = getComputedStyle(container);
@@ -108,6 +110,8 @@ export function closeDocx() {
   clearTimeout(resizeTimer);
   loaded = false;
   pinch = null;
+  cancelAnimationFrame(pinchFrame);
+  pinchFrame = 0;
   zoomLevel = 1;
   fitZoom = 1;
   naturalPageWidth = 0;
@@ -164,3 +168,46 @@ window.addEventListener("resize", () => {
     if (wasFit) setZoom(fitZoom);
   }, RESIZE_SETTLE_DELAY);
 });
+
+function touchDistance(touches) {
+  return Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+}
+
+// Two-finger pinch zooms around the fingers' midpoint. CSS zoom re-lays out
+// the document, so at most one zoom is applied per animation frame.
+container.addEventListener(
+  "touchstart",
+  (event) => {
+    if (!loaded || event.touches.length !== 2) return;
+    pinch = { startDistance: touchDistance(event.touches), startZoom: zoomLevel, next: null };
+  },
+  { passive: true }
+);
+
+container.addEventListener(
+  "touchmove",
+  (event) => {
+    if (!pinch || event.touches.length !== 2) return;
+    event.preventDefault();
+    const [first, second] = event.touches;
+    const mid = containerPoint((first.clientX + second.clientX) / 2, (first.clientY + second.clientY) / 2);
+    pinch.next = {
+      zoom: pinchDocxZoom(pinch.startZoom, pinch.startDistance, touchDistance(event.touches)),
+      x: mid.x,
+      y: mid.y,
+    };
+    if (pinchFrame) return;
+    pinchFrame = requestAnimationFrame(() => {
+      pinchFrame = 0;
+      if (pinch?.next) setZoom(pinch.next.zoom, pinch.next.x, pinch.next.y);
+    });
+  },
+  { passive: false }
+);
+
+function endPinch(event) {
+  if (event.touches.length < 2) pinch = null;
+}
+
+container.addEventListener("touchend", endPinch);
+container.addEventListener("touchcancel", endPinch);
