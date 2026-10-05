@@ -9,6 +9,7 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
+    "pdf-lib": "^1.17.1",
     "vitest": "^3.2.7"
   },
   "dependencies": {
