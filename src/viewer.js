@@ -22,6 +22,8 @@ const PAGE_METADATA_BATCH_SIZE = 16;
 
 let pdfDoc = null;
 let pdfLoadingTask = null;
+// Bumped by every closePdf(); a renderPdf that sees it change was superseded.
+let loadToken = 0;
 let pages = [];
 let pageModePreference = null;
 let zoomLevel = 1;
@@ -479,6 +481,7 @@ async function rerenderPages({ animate = false, anchor = null } = {}) {
 // Releases the open PDF (page renders, observer, pending timers, the PDF.js
 // document) and clears the page area. Safe to call when nothing is open.
 export async function closePdf() {
+  loadToken += 1;
   clearTimeout(zoomDebounceTimer);
   clearTimeout(resizeDebounceTimer);
   pageObserver?.disconnect();
@@ -499,13 +502,43 @@ export async function closePdf() {
   }
 }
 
-export async function renderPdf(bytes) {
-  await closePdf();
-  pageModePreference = null;
+// Drops a load that a later closePdf() superseded. Only the task this load
+// created is released, and only if nobody else took it over already.
+async function releaseSupersededLoad(loadingTask) {
+  if (!loadingTask || pdfLoadingTask !== loadingTask) return;
+  pdfLoadingTask = null;
+  pdfDoc = null;
   try {
-    pdfLoadingTask = pdfjsLib.getDocument({ data: bytes });
-    pdfDoc = await pdfLoadingTask.promise;
+    await loadingTask.destroy();
+  } catch (destroyError) {
+    reportError(`Could not release the superseded PDF load: ${destroyError.message || destroyError}`);
+  }
+}
+
+export async function renderPdf(bytes) {
+  // closePdf() bumps loadToken before its first await, so the token is read
+  // right after that bump: any later closePdf() (a newer open, PDF or Word)
+  // marks this load as superseded, even while this one is still closing.
+  const closing = closePdf();
+  const token = loadToken;
+  await closing;
+  if (token !== loadToken) return;
+  pageModePreference = null;
+  let loadingTask = null;
+  try {
+    loadingTask = pdfjsLib.getDocument({ data: bytes });
+    pdfLoadingTask = loadingTask;
+    const loadedDoc = await loadingTask.promise;
+    if (token !== loadToken) {
+      await releaseSupersededLoad(loadingTask);
+      return;
+    }
+    pdfDoc = loadedDoc;
   } catch (err) {
+    if (token !== loadToken) {
+      await releaseSupersededLoad(loadingTask);
+      return;
+    }
     const failedLoadingTask = pdfLoadingTask;
     pdfLoadingTask = null;
     pdfDoc = null;
@@ -520,13 +553,24 @@ export async function renderPdf(bytes) {
   }
 
   try {
-    pages = await loadPageMetadata();
+    const loadedPages = await loadPageMetadata();
+    if (token !== loadToken) {
+      await releaseSupersededLoad(loadingTask);
+      return;
+    }
+    pages = loadedPages;
     fitZoom = await computeFitZoom();
     zoomLevel = fitZoom;
     panX = 0;
     panY = 0;
     await rerenderPages({ animate: true });
   } catch (err) {
+    if (token !== loadToken) {
+      // closePdf() already cleared this load; the state now belongs to the
+      // newer open, so leave it alone.
+      await releaseSupersededLoad(loadingTask);
+      return;
+    }
     pageObserver?.disconnect();
     cancelAllPageRenders();
     renderGeneration += 1;
