@@ -645,6 +645,18 @@ body.drag-active #empty-state #empty-state-text {
 #docx-pages {
   width: max-content;
   margin: 0 auto;
+  /* Word's defaults, not the app's, for documents that don't set their own */
+  font-family: "Times New Roman", serif;
+  font-size: 10pt;
+  line-height: normal;
+  color-scheme: light;
+}
+
+/* Undo the app-wide `* { box-sizing: border-box }` (above, also zero
+   specificity, so this later rule wins) inside documents; :where() keeps it
+   at zero specificity so docx-preview's own box-sizing rules still apply. */
+:where(#docx-pages *) {
+  box-sizing: content-box;
 }
 
 /* Override docx-preview's own grey wrapper so pages sit on the app canvas. */
