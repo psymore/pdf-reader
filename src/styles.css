@@ -149,31 +149,117 @@ button:focus-visible {
   }
 }
 
-#page-mode-btn[hidden],
 #zoom-in-btn[hidden],
 #zoom-out-btn[hidden],
-#zoom-reset-btn[hidden] {
+#zoom-reset-btn[hidden],
+#fit-page-btn[hidden],
+#fullscreen-btn[hidden],
+#page-layout-seg[hidden],
+#page-nav[hidden] {
   display: none;
 }
 
-#page-mode-btn.layout-active {
+/* segmented single / side-by-side control */
+.toolbar-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--surface-hover);
+}
+
+.seg-btn {
+  width: 28px;
+  height: 26px;
+  border-radius: 6px;
+}
+
+.seg-btn[aria-pressed="true"] {
+  color: var(--accent-strong);
+  background: var(--bg-canvas);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+#fit-page-btn[aria-pressed="true"] {
   color: var(--accent-strong);
   background: var(--accent-soft);
 }
 
-#page-mode-btn .layout-icon-side-by-side,
-#page-mode-btn.layout-active .layout-icon-vertical {
+/* the full-screen button shows "enter" normally and "exit" while immersive */
+#fullscreen-btn .fs-exit-icon {
   display: none;
 }
 
-#page-mode-btn.layout-active .layout-icon-side-by-side {
+body.is-fullscreen #fullscreen-btn .fs-enter-icon {
+  display: none;
+}
+
+body.is-fullscreen #fullscreen-btn .fs-exit-icon {
   display: block;
 }
 
-#toolbar-menu-wrap {
+/* page number pill + go-to-page popover */
+.toolbar-nav-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.page-nav-btn {
+  width: auto;
+  gap: 6px;
+  padding: 0 9px;
+  font-size: 0.9em;
+  font-variant-numeric: tabular-nums;
+}
+
+#page-nav-label {
+  font-weight: 600;
+}
+
+#page-nav-popover {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 8px);
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-sidebar);
+  color: var(--text-hi);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
+}
+
+#page-nav-popover[hidden] {
   display: none;
+}
+
+#page-nav-input {
+  width: 62px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-canvas);
+  color: var(--text-hi);
+  font-size: 0.95em;
+  text-align: center;
+}
+
+#page-nav-total {
+  color: var(--text-lo);
+  font-size: 0.9em;
+}
+
+#toolbar-menu-wrap {
+  display: flex;
   position: relative;
   margin-left: auto;
+}
+
+#toolbar-menu-wrap[hidden] {
+  display: none;
 }
 
 #toolbar-menu {
@@ -203,7 +289,8 @@ button:focus-visible {
   letter-spacing: 0.06em;
 }
 
-.layout-menu-option {
+.layout-menu-option,
+.scroll-mode-option {
   width: 100%;
   min-height: 58px;
   display: grid;
@@ -216,26 +303,32 @@ button:focus-visible {
 }
 
 .layout-menu-option:hover,
-.layout-menu-option:active {
+.layout-menu-option:active,
+.scroll-mode-option:hover,
+.scroll-mode-option:active {
   background: var(--surface-hover);
 }
 
-.layout-menu-option.selected {
+.layout-menu-option.selected,
+.scroll-mode-option.selected {
   color: var(--accent-strong);
   background: var(--accent-soft);
 }
 
-.layout-menu-option:disabled {
+.layout-menu-option:disabled,
+.scroll-mode-option:disabled {
   opacity: 0.45;
   cursor: default;
 }
 
-.layout-menu-option span:nth-child(2) {
+.layout-menu-option span:nth-child(2),
+.scroll-mode-option span:nth-child(2) {
   display: flex;
   flex-direction: column;
 }
 
-.layout-menu-option small {
+.layout-menu-option small,
+.scroll-mode-option small {
   margin-top: 2px;
   color: var(--text-lo);
   font-size: 0.82em;
@@ -246,8 +339,31 @@ button:focus-visible {
   font-size: 1.1em;
 }
 
-.layout-menu-option.selected .layout-option-check {
+.layout-menu-option.selected .layout-option-check,
+.scroll-mode-option.selected .layout-option-check {
   visibility: visible;
+}
+
+/* zoom controls live in the top bar on desktop; on phones they move into the
+   overflow menu (see the max-width block below) to keep the bar uncrowded */
+.toolbar-menu-zoom {
+  display: none;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.menu-zoom-btn {
+  width: 100%;
+  padding: 10px 8px;
+  border-radius: 7px;
+  text-align: left;
+  color: var(--text-hi);
+}
+
+.menu-zoom-btn:hover,
+.menu-zoom-btn:active {
+  background: var(--surface-hover);
 }
 
 /* ---------- shell / sidebar ---------- */
@@ -569,12 +685,19 @@ body.drag-active #empty-state #empty-state-text {
 /* ---------- narrow screens: sidebar becomes an off-canvas drawer ---------- */
 
 @media (max-width: 640px) {
-  #page-mode-btn,
   #app-title {
     display: none;
   }
 
-  #toolbar-menu-wrap {
+  /* Approach A: on phones the zoom controls move off the crowded top bar and
+     into the overflow menu; fit-page, page-nav and full-screen stay in reach */
+  #zoom-out-btn,
+  #zoom-in-btn,
+  #zoom-reset-btn {
+    display: none;
+  }
+
+  .toolbar-menu-zoom {
     display: block;
   }
 
@@ -761,4 +884,81 @@ body.drag-active #empty-state #empty-state-text {
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30' fill='%23201d1a'%3E%3Cpath d='M15 4l4 5h-8zM15 26l-4-5h8zM4 15l5-4v8zM26 15l-5 4v-8z'/%3E%3Ccircle cx='15' cy='15' r='2'/%3E%3C/svg%3E") center / 100% no-repeat,
     rgba(240, 236, 228, 0.9);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+
+/* ---------- full screen (immersive reading) ---------- */
+
+/* The toolbar becomes an auto-hiding overlay: hidden by default while
+   immersive, slid into view on tap (touch) or mouse movement (desktop), so
+   every control stays reachable without leaving full screen. */
+body.is-fullscreen #toolbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  transform: translateY(-100%);
+  transition: transform 0.2s ease;
+}
+
+body.is-fullscreen.controls-visible #toolbar {
+  transform: none;
+}
+
+body.is-fullscreen #app-shell {
+  height: 100vh;
+}
+
+body.is-fullscreen #sidebar,
+body.is-fullscreen #sidebar-toggle-btn {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.is-fullscreen #toolbar {
+    transition: none;
+  }
+}
+
+/* Acrobat-style page bar pinned to the bottom while immersive */
+#fs-page-bar {
+  position: fixed;
+  z-index: 60;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  display: none;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  color: #f4f1ea;
+  background: rgba(22, 22, 22, 0.82);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  font-variant-numeric: tabular-nums;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+body.is-fullscreen.pdf-active #fs-page-bar {
+  display: flex;
+}
+
+#fs-page-bar button {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f4f1ea;
+  border-radius: 50%;
+}
+
+#fs-page-bar button:hover,
+#fs-page-bar button:active {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+#fs-page-bar button:disabled {
+  opacity: 0.35;
 }

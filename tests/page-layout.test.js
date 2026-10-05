@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { computeFitZoom, computePageColumns, resolveDualPageMode } from "../src/page-layout.js";
+import {
+  computeFitPageZoom,
+  computeFitZoom,
+  computePageColumns,
+  currentPageFromPositions,
+  resolveDualPageMode,
+} from "../src/page-layout.js";
 
 describe("computePageColumns", () => {
   it("always keeps a dual-page pair, even when it must overflow", () => {
@@ -51,5 +57,47 @@ describe("resolveDualPageMode", () => {
 
   it("keeps a one-page document in vertical mode", () => {
     expect(resolveDualPageMode(1600, 1, "dual")).toBe(false);
+  });
+});
+
+describe("computeFitPageZoom", () => {
+  it("uses the width fit when the page is wider than it is tall", () => {
+    // width fit = 800/400 = 2; height fit = 1200/300 = 4 -> width wins
+    expect(computeFitPageZoom(800, 1200, 400, 300, 16, false)).toBe(2);
+  });
+
+  it("uses the height fit when the page is taller than the viewport", () => {
+    // width fit = 800/400 = 2; height fit = 600/600 = 1 -> height wins
+    expect(computeFitPageZoom(800, 600, 400, 600, 16, false)).toBe(1);
+  });
+
+  it("falls back to the width fit when height is unavailable", () => {
+    expect(computeFitPageZoom(800, 0, 400, 600, 16, false)).toBe(2);
+  });
+});
+
+describe("currentPageFromPositions", () => {
+  const positions = [
+    { pageNumber: 1, top: -50, bottom: 150 },
+    { pageNumber: 2, top: 150, bottom: 400 },
+    { pageNumber: 3, top: 400, bottom: 650 },
+  ];
+
+  it("returns the page straddling the reference line", () => {
+    expect(currentPageFromPositions(positions, 0)).toBe(1);
+    expect(currentPageFromPositions(positions, 300)).toBe(2);
+    expect(currentPageFromPositions(positions, 500)).toBe(3);
+  });
+
+  it("picks the nearest page centre when a gap straddles the line", () => {
+    const gapped = [
+      { pageNumber: 1, top: -300, bottom: -100 },
+      { pageNumber: 2, top: 20, bottom: 180 },
+    ];
+    expect(currentPageFromPositions(gapped, 0)).toBe(2);
+  });
+
+  it("returns null when there are no pages", () => {
+    expect(currentPageFromPositions([], 0)).toBe(null);
   });
 });

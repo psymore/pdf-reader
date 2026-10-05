@@ -3,13 +3,21 @@ import { computeZoom } from "./zoom.js";
 import { autoscrollSpeed, AUTOSCROLL_DEAD_ZONE } from "./autoscroll.js";
 import {
   computeFitZoom as fitZoomForPages,
+  computeFitPageZoom as fitPageZoomForPage,
   computePageColumns,
+  currentPageFromPositions,
   resolveDualPageMode,
 } from "./page-layout.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "./vendor/pdfjs/pdf.worker.mjs";
 // JPEG 2000 / JBIG2 / color-profile decoders; without them scanned PDFs render blank.
 const WASM_URL = new URL("./vendor/pdfjs/wasm/", import.meta.url).href;
+// CMaps for CJK/CID-keyed fonts, base-14 standard font data, and the default
+// CMYK ICC profile — all optional external asset sets PDF.js fetches on demand.
+// Without them, non-embedded fonts and some CMYK colors render wrong or blank.
+const CMAP_URL = new URL("./vendor/pdfjs/cmaps/", import.meta.url).href;
+const STANDARD_FONT_URL = new URL("./vendor/pdfjs/standard_fonts/", import.meta.url).href;
+const ICC_URL = new URL("./vendor/pdfjs/iccs/", import.meta.url).href;
 
 const container = document.getElementById("viewer-container");
 const pagesWrapper = document.getElementById("pdf-pages");
@@ -27,6 +35,9 @@ const FLING_MIN_SPEED = 0.02; // px/ms below which the glide stops
 const FLING_MAX_SPEED = 6; // px/ms cap so a flick can't launch the page
 const FLING_STALE_MS = 80; // finger paused longer than this before lift = no glide
 const PAGE_METADATA_BATCH_SIZE = 16;
+// Minimum horizontal travel (px) of a one-finger swipe that flips the page in
+// paged mode when the page can't pan sideways (it already fits the width).
+const PAGE_SWIPE_THRESHOLD = 50;
 
 let pdfDoc = null;
 let pdfLoadingTask = null;
@@ -34,6 +45,9 @@ let pdfLoadingTask = null;
 let loadToken = 0;
 let pages = [];
 let pageModePreference = null;
+// "continuous" = free pan/momentum scroll; "paged" = a whole page fits the
+// viewport (minimum zoom) and navigation moves one page at a time.
+let scrollMode = "continuous";
 let zoomLevel = 1;
 let panX = 0;
 let panY = 0;
@@ -53,6 +67,8 @@ let panVelocity = null; // { vx, vy, time } from the latest touchmove, px/ms
 let pageRenderedHook = null;
 let pageUnloadedHook = null;
 let documentChangeHook = null;
+let pageChangeHook = null;
+let lastReportedPage = null;
 let panEnabled = true;
 // Middle-click autoscroll: { originX, originY, x, y, held, dragged, frame }.
 let autoscroll = null;
@@ -62,7 +78,28 @@ function isDualPageMode() {
   return resolveDualPageMode(window.innerWidth, pdfDoc?.numPages ?? 0, pageModePreference);
 }
 
+// Whole-page fit zoom for the page currently at the top of the viewport.
+// Cheap enough to call from minimumZoom(); falls back to the single-page
+// floor before a document is laid out.
+function currentFitPageZoom() {
+  if (!pdfDoc || pages.length === 0) return MIN_SINGLE_PAGE_ZOOM;
+  const current = currentPageNumber() ?? 1;
+  const page = pages[current - 1] ?? pages[0];
+  const { top, bottom } = containerInsets();
+  const availableHeight = Math.max(0, container.clientHeight - top - bottom);
+  const zoom = fitPageZoomForPage(
+    container.clientWidth,
+    availableHeight,
+    page.width,
+    page.height,
+    getPageGap(),
+    isDualPageMode(),
+  );
+  return Math.min(MAX_ZOOM, Math.max(MIN_SINGLE_PAGE_ZOOM, zoom));
+}
+
 function minimumZoom() {
+  if (scrollMode === "paged") return currentFitPageZoom();
   return isDualPageMode() ? MIN_DUAL_PAGE_ZOOM : MIN_SINGLE_PAGE_ZOOM;
 }
 
@@ -103,13 +140,19 @@ function contentSize() {
   };
 }
 
+function containerInsets() {
+  const containerStyle = getComputedStyle(container);
+  return {
+    top: Number.parseFloat(containerStyle.paddingTop) || 0,
+    bottom: Number.parseFloat(containerStyle.paddingBottom) || 0,
+  };
+}
+
 function clampPan() {
   const { width, height } = contentSize();
   const viewportWidth = container.clientWidth;
   const viewportHeight = container.clientHeight;
-  const containerStyle = getComputedStyle(container);
-  const topInset = Number.parseFloat(containerStyle.paddingTop) || 0;
-  const bottomInset = Number.parseFloat(containerStyle.paddingBottom) || 0;
+  const { top: topInset, bottom: bottomInset } = containerInsets();
   const usableHeight = Math.max(0, viewportHeight - topInset - bottomInset);
   panX = width <= viewportWidth
     ? (viewportWidth - width) / 2
@@ -159,10 +202,39 @@ function applyTransform() {
 function updateView({ rerender = false, anchor = null } = {}) {
   clampPan();
   applyTransform();
+  reportCurrentPage();
   if (rerender) {
     if (anchor) pendingZoomAnchor = anchor;
     scheduleRerender();
   }
+}
+
+// Page number currently at the top of the viewport, computed from the cached
+// page layout offsets (no per-frame DOM reads). Returns null when nothing is
+// open or laid out yet.
+function currentPageNumber() {
+  if (!pdfDoc || pages.length === 0 || renderedZoom <= 0) return null;
+  const scale = zoomLevel / renderedZoom;
+  const base = pagesWrapper.offsetTop + panY;
+  const referenceY = containerInsets().top + 1;
+  const positions = [];
+  for (const page of pages) {
+    if (page.layoutTop == null) continue;
+    positions.push({
+      pageNumber: page.pageNumber,
+      top: base + page.layoutTop * scale,
+      bottom: base + page.layoutBottom * scale,
+    });
+  }
+  return currentPageFromPositions(positions, referenceY);
+}
+
+function reportCurrentPage() {
+  if (!pageChangeHook) return;
+  const current = currentPageNumber();
+  if (current == null || current === lastReportedPage) return;
+  lastReportedPage = current;
+  pageChangeHook(current, pdfDoc?.numPages ?? 0);
 }
 
 function scheduleRerender(delay = ZOOM_RERENDER_DELAY) {
@@ -323,6 +395,85 @@ export function setPageUnloadedHook(fn) {
 
 export function setDocumentChangeHook(fn) {
   documentChangeHook = fn;
+}
+
+export function setPageChangeHook(fn) {
+  pageChangeHook = fn;
+}
+
+export function getPageCount() {
+  return pdfDoc?.numPages ?? 0;
+}
+
+export function getCurrentPage() {
+  return currentPageNumber();
+}
+
+// Scrolls page `pageNumber` to the top of the viewport. Used by the page
+// navigation control; also the primary navigation in paged scroll mode.
+export function goToPage(pageNumber) {
+  if (!pdfDoc || pages.length === 0) return;
+  const clamped = Math.min(pages.length, Math.max(1, Math.round(pageNumber)));
+  const page = pages[clamped - 1];
+  if (page?.layoutTop == null) return;
+  stopFling();
+  const scale = renderedZoom > 0 ? zoomLevel / renderedZoom : 1;
+  panY = containerInsets().top - pagesWrapper.offsetTop - page.layoutTop * scale;
+  updateView({ rerender: true });
+}
+
+// Zoom so the whole current page fits the viewport (both dimensions), unlike
+// resetZoom() which fits width only. Also the minimum zoom baseline in paged
+// mode. Keeps the current focal point via the anchor.
+export async function fitPage() {
+  if (!pdfDoc || pages.length === 0) return;
+  const anchor = captureAnchor({
+    x: container.clientWidth / 2,
+    y: container.clientHeight / 2,
+  });
+  const current = currentPageNumber() ?? 1;
+  const page = pages[current - 1] ?? pages[0];
+  const { top: topInset, bottom: bottomInset } = containerInsets();
+  const availableHeight = Math.max(0, container.clientHeight - topInset - bottomInset);
+  const zoom = fitPageZoomForPage(
+    container.clientWidth,
+    availableHeight,
+    page.width,
+    page.height,
+    getPageGap(),
+    isDualPageMode(),
+  );
+  zoomLevel = Math.min(MAX_ZOOM, Math.max(minimumZoom(), zoom));
+  pendingZoomAnchor = anchor;
+  updateView({ rerender: true });
+}
+
+export function getScrollMode() {
+  return scrollMode;
+}
+
+// Switches between continuous and paged scrolling. Entering paged mode fits
+// the current page whole and snaps it to the top; the minimum zoom then holds
+// a page in view until the reader zooms in.
+export function setScrollMode(mode) {
+  if (mode !== "continuous" && mode !== "paged") return scrollMode;
+  scrollMode = mode;
+  pagesWrapper.classList.toggle("paged-mode", mode === "paged");
+  if (!pdfDoc || pages.length === 0) return scrollMode;
+  if (mode === "paged") {
+    const current = currentPageNumber() ?? 1;
+    zoomLevel = currentFitPageZoom();
+    rerenderPages()
+      .then(() => goToPage(current))
+      .catch((err) => reportError(`Could not render PDF: ${err.message || err}`));
+  }
+  return scrollMode;
+}
+
+export function goToAdjacentPage(direction) {
+  const current = currentPageNumber() ?? 1;
+  const step = isDualPageMode() ? 2 : 1;
+  goToPage(current + (direction > 0 ? step : -step));
 }
 
 export function setPanEnabled(enabled) {
@@ -548,12 +699,21 @@ async function rerenderPages({ animate = false, anchor = null } = {}) {
   for (const page of pages) fragment.appendChild(makePageSlot(page, targetZoom, animate));
   pagesWrapper.replaceChildren(fragment);
 
+  // Cache each slot's layout box (in renderedZoom px) so current-page
+  // tracking and goToPage() work from arithmetic, not per-frame DOM reads.
+  for (const page of pages) {
+    page.layoutTop = page.slot.offsetTop;
+    page.layoutBottom = page.slot.offsetTop + page.slot.offsetHeight;
+  }
+
   renderedZoom = targetZoom;
   renderedContentWidth = pagesWrapper.scrollWidth;
   renderedContentHeight = pagesWrapper.scrollHeight;
   if (anchor) restoreAnchor(anchor, targetZoom);
   clampPan();
   applyTransform();
+  lastReportedPage = null;
+  reportCurrentPage();
   createObserver(generation);
 
   await renderNearViewport(generation);
@@ -577,6 +737,7 @@ export async function closePdf() {
   pdfLoadingTask = null;
   pdfDoc = null;
   documentChangeHook?.("closed");
+  lastReportedPage = null;
   pages = [];
   gesture = null;
   pendingZoomAnchor = null;
@@ -612,7 +773,14 @@ export async function renderPdf(bytes) {
   pageModePreference = null;
   let loadingTask = null;
   try {
-    loadingTask = pdfjsLib.getDocument({ data: bytes, wasmUrl: WASM_URL });
+    loadingTask = pdfjsLib.getDocument({
+      data: bytes,
+      wasmUrl: WASM_URL,
+      cMapUrl: CMAP_URL,
+      cMapPacked: true,
+      standardFontDataUrl: STANDARD_FONT_URL,
+      iccUrl: ICC_URL,
+    });
     pdfLoadingTask = loadingTask;
     const loadedDoc = await loadingTask.promise;
     if (token !== loadToken) {
@@ -831,6 +999,7 @@ container.addEventListener("touchmove", (event) => {
 
   if (gesture.kind === "pan" && event.touches.length === 1) {
     const point = touchPoint(event.touches[0]);
+    gesture.lastPoint = point;
     const prevX = panX;
     const prevY = panY;
     panX = gesture.startPanX + point.x - gesture.start.x;
@@ -873,11 +1042,29 @@ function commitZoom() {
   });
 }
 
+// A one-finger swipe that flipped the page in paged mode: horizontal, past the
+// threshold, and only when the page is already as wide as the viewport (so the
+// swipe wasn't meant to pan sideways).
+function pagedSwipeDirection(panGesture) {
+  if (scrollMode !== "paged" || panGesture?.kind !== "pan" || !panGesture.lastPoint) return 0;
+  const dx = panGesture.lastPoint.x - panGesture.start.x;
+  const dy = panGesture.lastPoint.y - panGesture.start.y;
+  if (Math.abs(dx) <= Math.abs(dy) || Math.abs(dx) < PAGE_SWIPE_THRESHOLD) return 0;
+  if (contentSize().width > container.clientWidth + 1) return 0;
+  return dx < 0 ? 1 : -1;
+}
+
 container.addEventListener("touchend", (event) => {
   const wasZooming = gesture?.kind === "pinch";
   const wasPanning = gesture?.kind === "pan";
+  const swipeDirection = pagedSwipeDirection(gesture);
   if (event.touches.length === 0) {
     gesture = null;
+    if (swipeDirection) {
+      panVelocity = null;
+      goToAdjacentPage(swipeDirection);
+      return;
+    }
     if (wasPanning && panVelocity && performance.now() - panVelocity.time < FLING_STALE_MS) {
       const speed = Math.hypot(panVelocity.vx, panVelocity.vy);
       if (speed > FLING_MIN_SPEED) {
