@@ -97,13 +97,19 @@ function closeToolbarMenu() {
 
 // Renders a file's bytes in the viewer that matches its contents (not its
 // name — Android content:// URIs have none). Returns false when a newer open
-// superseded this one mid-render; the caller must then leave the UI alone.
+// superseded this one mid-render, or when a legacy .doc was rejected (the
+// error is already in the status bar); the caller must then leave the UI alone.
 async function showDocument(bytes) {
-  const sequence = ++openSequence;
   const data = new Uint8Array(bytes);
   // Unrecognized bytes go to PDF.js, which reports its own precise error.
   const kind = detectDocumentKind(data) ?? "pdf";
-  if (kind === "doc") throw LEGACY_DOC_MESSAGE;
+  // A rejected legacy .doc touches nothing: the open document (or an open
+  // still in progress) and the toolbar stay as they are.
+  if (kind === "doc") {
+    setStatus(`Error: ${LEGACY_DOC_MESSAGE}`);
+    return false;
+  }
+  const sequence = ++openSequence;
   activeKind = null;
   try {
     if (kind === "docx") {
