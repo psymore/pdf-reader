@@ -22,9 +22,16 @@ function bbox(points) {
   return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
 }
 
+const allFinite = (list) => list.every((n) => Number.isFinite(n));
+
 function appendAnnot(doc, page, dict) {
   const ref = doc.context.register(doc.context.obj(dict));
-  const existing = page.node.lookupMaybe(PDFName.of("Annots"), PDFArray);
+  let existing;
+  try {
+    existing = page.node.lookupMaybe(PDFName.of("Annots"), PDFArray);
+  } catch {
+    existing = undefined; // malformed /Annots: start a fresh array
+  }
   if (existing) {
     existing.push(ref);
   } else {
@@ -32,18 +39,19 @@ function appendAnnot(doc, page, dict) {
   }
 }
 
-function formStream(doc, content, box, resources = {}) {
-  return doc.context.register(
-    doc.context.stream(content, {
-      Type: "XObject",
-      Subtype: "Form",
-      BBox: box.map(f),
-      Resources: resources,
-    })
-  );
+function formStream(doc, content, box, resources = {}, matrix = null) {
+  const dict = {
+    Type: "XObject",
+    Subtype: "Form",
+    BBox: box.map(f),
+    Resources: resources,
+  };
+  if (matrix) dict.Matrix = matrix.map(f);
+  return doc.context.register(doc.context.stream(content, dict));
 }
 
 function highlightAnnot(doc, mark, toPdf) {
+  if (!Array.isArray(mark.rects) || mark.rects.length === 0) return null;
   const color = hexToRgb(mark.color);
   const quads = [];
   const corners = [];
@@ -58,6 +66,7 @@ function highlightAnnot(doc, mark, toPdf) {
     corners.push(tl, tr, bl, br);
     content.push(`${f(bl[0])} ${f(bl[1])} m ${f(br[0])} ${f(br[1])} l ${f(tr[0])} ${f(tr[1])} l ${f(tl[0])} ${f(tl[1])} l h f`);
   }
+  if (!allFinite(quads)) return null;
   const rect = bbox(corners);
   const ap = formStream(
     doc,
@@ -78,8 +87,10 @@ function highlightAnnot(doc, mark, toPdf) {
 }
 
 function inkAnnot(doc, mark, toPdf) {
+  if (!Array.isArray(mark.points) || mark.points.length === 0) return null;
   const color = hexToRgb(mark.color);
   const pts = mark.points.map((p) => toPdf(p.x, p.y));
+  if (!allFinite(pts.flat()) || !Number.isFinite(mark.width)) return null;
   const half = mark.width / 2;
   const [x0, y0, x1, y1] = bbox(pts);
   const rect = [x0 - half, y0 - half, x1 + half, y1 + half];
@@ -113,18 +124,30 @@ async function noteAnnot(doc, mark, toPdf, renderNoteImage) {
     width = image.width;
     height = image.height;
   }
-  const a = toPdf(mark.x, mark.y);
-  const b = toPdf(mark.x + width, mark.y + height);
-  const rect = bbox([a, b]);
+  const corners = [
+    toPdf(mark.x, mark.y),
+    toPdf(mark.x + width, mark.y),
+    toPdf(mark.x, mark.y + height),
+    toPdf(mark.x + width, mark.y + height),
+  ];
+  if (!allFinite(corners.flat())) return null;
+  const rect = bbox(corners);
   if (image) {
     const png = await doc.embedPng(image.png);
-    const w = rect[2] - rect[0];
-    const h = rect[3] - rect[1];
+    // Form-local (u, v), y up, maps to view point (x + u, y + height - v).
+    const p0 = toPdf(mark.x, mark.y + height);
+    const pu = toPdf(mark.x + 1, mark.y + height);
+    const pv = toPdf(mark.x, mark.y + height - 1);
+    const matrix = [pu[0] - p0[0], pu[1] - p0[1], pv[0] - p0[0], pv[1] - p0[1], p0[0], p0[1]];
+    if (!allFinite(matrix)) return null;
     const name = "Im0";
-    apRef = formStream(doc, `q ${f(w)} 0 0 ${f(h)} 0 0 cm /${name} Do Q`, [0, 0, w, h], {
-      XObject: { [name]: png.ref },
-    });
-    // BBox is local; Rect places it on the page
+    apRef = formStream(
+      doc,
+      `q ${f(width)} 0 0 ${f(height)} 0 0 cm /${name} Do Q`,
+      [0, 0, width, height],
+      { XObject: { [name]: png.ref } },
+      matrix
+    );
   }
   const dict = {
     Type: "Annot",
