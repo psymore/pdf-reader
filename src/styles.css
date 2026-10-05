@@ -741,3 +741,24 @@ body.drag-active #empty-state #empty-state-text {
   border-radius: 4px;
   padding: 4px 6px;
 }
+
+/* ---------- middle-click autoscroll ---------- */
+
+#viewer-container.autoscrolling,
+#viewer-container.autoscrolling * {
+  cursor: all-scroll !important;
+}
+
+.autoscroll-marker {
+  position: fixed;
+  z-index: 1000;
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+  border-radius: 50%;
+  pointer-events: none;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30' fill='%23201d1a'%3E%3Cpath d='M15 4l4 5h-8zM15 26l-4-5h8zM4 15l5-4v8zM26 15l-5 4v-8z'/%3E%3Ccircle cx='15' cy='15' r='2'/%3E%3C/svg%3E") center / 100% no-repeat,
+    rgba(240, 236, 228, 0.9);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}

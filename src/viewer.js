@@ -1,5 +1,6 @@
 import * as pdfjsLib from "./vendor/pdfjs/pdf.mjs";
 import { computeZoom } from "./zoom.js";
+import { autoscrollSpeed, AUTOSCROLL_DEAD_ZONE } from "./autoscroll.js";
 import {
   computeFitZoom as fitZoomForPages,
   computePageColumns,
@@ -51,6 +52,9 @@ let pageRenderedHook = null;
 let pageUnloadedHook = null;
 let documentChangeHook = null;
 let panEnabled = true;
+// Middle-click autoscroll: { originX, originY, x, y, held, dragged, frame }.
+let autoscroll = null;
+let autoscrollMarker = null;
 
 function isDualPageMode() {
   return resolveDualPageMode(window.innerWidth, pdfDoc?.numPages ?? 0, pageModePreference);
@@ -559,6 +563,7 @@ async function rerenderPages({ animate = false, anchor = null } = {}) {
 // document) and clears the page area. Safe to call when nothing is open.
 export async function closePdf() {
   stopFling();
+  stopAutoscroll();
   loadToken += 1;
   clearTimeout(zoomDebounceTimer);
   clearTimeout(resizeDebounceTimer);
@@ -681,6 +686,7 @@ container.addEventListener(
     event.preventDefault();
     if (!pdfDoc) return;
     stopFling();
+    stopAutoscroll();
     if (event.ctrlKey || event.metaKey) {
       zoomByWheel(event);
     } else {
@@ -691,6 +697,90 @@ container.addEventListener(
   },
   { passive: false }
 );
+
+// Desktop middle-click autoscroll, like the browser's native one (which the
+// Word view gets for free): the page moves towards the cursor at a speed set
+// by its distance from where the middle button went down. A click without
+// moving keeps it running until the next click; press-drag-release stops on
+// release.
+function startAutoscroll(event) {
+  stopFling();
+  autoscroll = {
+    originX: event.clientX,
+    originY: event.clientY,
+    x: event.clientX,
+    y: event.clientY,
+    held: true,
+    dragged: false,
+    frame: 0,
+  };
+  autoscrollMarker ??= Object.assign(document.createElement("div"), { className: "autoscroll-marker" });
+  autoscrollMarker.style.left = `${event.clientX}px`;
+  autoscrollMarker.style.top = `${event.clientY}px`;
+  document.body.append(autoscrollMarker);
+  container.classList.add("autoscrolling");
+
+  let lastTime = performance.now();
+  const step = (now) => {
+    const dt = Math.min(now - lastTime, 50);
+    lastTime = now;
+    const vx = autoscrollSpeed(autoscroll.x - autoscroll.originX);
+    const vy = autoscrollSpeed(autoscroll.y - autoscroll.originY);
+    if (vx || vy) {
+      panX -= vx * dt;
+      panY -= vy * dt;
+      updateView();
+    }
+    autoscroll.frame = requestAnimationFrame(step);
+  };
+  autoscroll.frame = requestAnimationFrame(step);
+}
+
+function stopAutoscroll() {
+  if (!autoscroll) return;
+  cancelAnimationFrame(autoscroll.frame);
+  autoscroll = null;
+  autoscrollMarker?.remove();
+  container.classList.remove("autoscrolling");
+}
+
+// Capture on window: a click anywhere ends a running autoscroll and does
+// nothing else (it never reaches the toolbar or the start listener below).
+window.addEventListener("mousedown", (event) => {
+  if (!autoscroll) return;
+  event.preventDefault();
+  event.stopPropagation();
+  stopAutoscroll();
+}, true);
+
+container.addEventListener("mousedown", (event) => {
+  if (event.button !== 1 || !pdfDoc) return;
+  event.preventDefault(); // no native autoscroll / paste
+  startAutoscroll(event);
+}, true);
+
+window.addEventListener("mousemove", (event) => {
+  if (!autoscroll) return;
+  autoscroll.x = event.clientX;
+  autoscroll.y = event.clientY;
+  if (autoscroll.held && (
+    Math.abs(event.clientX - autoscroll.originX) > AUTOSCROLL_DEAD_ZONE ||
+    Math.abs(event.clientY - autoscroll.originY) > AUTOSCROLL_DEAD_ZONE
+  )) {
+    autoscroll.dragged = true;
+  }
+});
+
+window.addEventListener("mouseup", (event) => {
+  if (!autoscroll || event.button !== 1) return;
+  if (autoscroll.dragged) stopAutoscroll();
+  else autoscroll.held = false;
+});
+
+window.addEventListener("keydown", (event) => {
+  if (autoscroll && event.key === "Escape") stopAutoscroll();
+});
+window.addEventListener("blur", stopAutoscroll);
 
 function touchPoint(touch) {
   return containerRelativePoint(touch.clientX, touch.clientY);
@@ -728,6 +818,7 @@ function beginGesture(touches) {
 container.addEventListener("touchstart", (event) => {
   if (!pdfDoc) return;
   stopFling(); // a touch catches the gliding page, like native scrolling
+  stopAutoscroll();
   panVelocity = null;
   beginGesture(event.touches);
 }, { passive: true });
