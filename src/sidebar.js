@@ -1,5 +1,6 @@
 import { groupByPinned } from "./recent-list.js";
 import { emit, on } from "./app-events.js";
+import { documentKindFromName } from "./document-kind.js";
 
 const { invoke } = window.__TAURI__.core;
 
@@ -151,6 +152,18 @@ function renderRow(entry) {
   row.className = "sidebar-row";
   row.classList.toggle("active", entry.path === activePath);
   row.setAttribute("aria-current", entry.path === activePath ? "true" : "false");
+
+  const kind = documentKindFromName(entry.name);
+  if (kind === "pdf" || kind === "docx") {
+    const badge = document.createElement("span");
+    badge.className = `sidebar-row-kind sidebar-row-kind-${kind}`;
+    badge.textContent = kind === "docx" ? "DOCX" : "PDF";
+    badge.setAttribute("aria-hidden", "true");
+    badge.addEventListener("click", () => {
+      emit("open-requested", { path: entry.path });
+    });
+    row.appendChild(badge);
+  }
 
   const label = document.createElement("span");
   label.className = "sidebar-row-label";

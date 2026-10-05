@@ -667,3 +667,26 @@ body.drag-active #empty-state #empty-state-text {
     margin-bottom: 12px;
   }
 }
+
+.sidebar-row-kind {
+  flex-shrink: 0;
+  margin-right: 7px;
+  padding: 0 4px;
+  border: 1px solid var(--border-idle);
+  border-radius: 3px;
+  font-size: 0.62em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  color: var(--text-lo);
+}
+
+.sidebar-row-kind-pdf {
+  color: #e0796b;
+  border-color: rgba(224, 121, 107, 0.45);
+}
+
+.sidebar-row-kind-docx {
+  color: #7aa7e8;
+  border-color: rgba(122, 167, 232, 0.45);
+}
