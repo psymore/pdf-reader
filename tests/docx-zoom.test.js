@@ -5,7 +5,6 @@ import {
   clampDocxZoom,
   fitDocxZoom,
   pinchDocxZoom,
-  scrollForZoom,
   stepDocxZoom,
 } from "../src/docx-zoom.js";
 
@@ -60,16 +59,5 @@ describe("pinchDocxZoom", () => {
 
   it("ignores a zero start distance", () => {
     expect(pinchDocxZoom(1, 0, 200)).toBe(1);
-  });
-});
-
-describe("scrollForZoom", () => {
-  it("keeps the anchored content point under the anchor", () => {
-    // content at scroll 100 + anchor 200 = 300 doubles to 600; minus anchor 200
-    expect(scrollForZoom(100, 200, 1, 2)).toBe(400);
-  });
-
-  it("never returns a negative scroll offset", () => {
-    expect(scrollForZoom(0, 200, 2, 1)).toBe(0);
   });
 });

@@ -108,6 +108,7 @@ async function showDocument(bytes) {
   try {
     if (kind === "docx") {
       await closePdf();
+      if (sequence !== openSequence) return false;
       showViewer("docx");
       await renderDocx(data);
     } else {

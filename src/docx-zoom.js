@@ -22,7 +22,3 @@ export function pinchDocxZoom(startZoom, startDistance, currentDistance) {
   if (!(startDistance > 0)) return clampDocxZoom(startZoom);
   return clampDocxZoom((startZoom * currentDistance) / startDistance);
 }
-
-export function scrollForZoom(scroll, anchor, previousZoom, nextZoom) {
-  return Math.max(0, ((scroll + anchor) * nextZoom) / previousZoom - anchor);
-}

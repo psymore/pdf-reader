@@ -4,7 +4,6 @@ import {
   DOCX_MIN_ZOOM,
   clampDocxZoom,
   fitDocxZoom,
-  scrollForZoom,
   stepDocxZoom,
 } from "./docx-zoom.js";
 
@@ -12,7 +11,9 @@ const container = document.getElementById("docx-container");
 const pagesEl = document.getElementById("docx-pages");
 
 // Keep Word's page boundaries, headers/footers and notes. Images are
-// embedded as data URLs so no blob: URLs leak across documents.
+// embedded as data URLs so no blob: URLs leak across documents. Embedded HTML
+// (altChunk) is never rendered because docx-preview would put it in an
+// unsandboxed same-origin iframe.
 const RENDER_OPTIONS = {
   className: "docx",
   inWrapper: true,
@@ -23,6 +24,7 @@ const RENDER_OPTIONS = {
   renderFootnotes: true,
   renderEndnotes: true,
   useBase64URL: true,
+  renderAltChunks: false,
 };
 const RESIZE_SETTLE_DELAY = 150;
 
@@ -60,11 +62,17 @@ function setZoom(nextZoom, anchorX = container.clientWidth / 2, anchorY = contai
   const previous = zoomLevel;
   zoomLevel = clampDocxZoom(nextZoom);
   if (zoomLevel === previous) return;
-  const left = scrollForZoom(container.scrollLeft, anchorX, previous, zoomLevel);
-  const top = scrollForZoom(container.scrollTop, anchorY, previous, zoomLevel);
+  const frame = container.getBoundingClientRect();
+  const clientX = frame.left + anchorX;
+  const clientY = frame.top + anchorY;
+  const before = pagesEl.getBoundingClientRect();
+  // the anchored point, in unzoomed document px
+  const contentX = (clientX - before.left) / previous;
+  const contentY = (clientY - before.top) / previous;
   pagesEl.style.zoom = String(zoomLevel);
-  container.scrollLeft = left;
-  container.scrollTop = top;
+  const after = pagesEl.getBoundingClientRect();
+  container.scrollLeft += after.left + contentX * zoomLevel - clientX;
+  container.scrollTop += after.top + contentY * zoomLevel - clientY;
 }
 
 export async function renderDocx(bytes) {
