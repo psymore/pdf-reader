@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- App icon source: two chunky pages, blue (Word) behind and amber (PDF) in
+       front, on a transparent background. Regenerate the platform icons with
+       `npx tauri icon src-tauri/icons/icon-manifest.json` after editing. -->
+  <defs>
+    <!-- Page with a folded top-right corner. A same-colour round-join stroke
+         softens every corner, which is what makes the shapes look chunky. -->
+    <path id="page" d="M0 0H330L480 150V560H0Z"/>
+    <path id="fold" d="M330 0V150H480Z"/>
+    <path id="lines" d="M50 230H320M50 340H400M50 450H260"/>
+    <mask id="gap" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <!-- the front page plus a border, cut out of the back page -->
+      <use xlink:href="#page" transform="translate(410 330) rotate(7 240 280)" stroke="#000" stroke-width="150" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+
+  <g mask="url(#gap)">
+    <g transform="translate(120 120) rotate(-9 240 280)">
+      <use xlink:href="#page" fill="#3f7fd8" stroke="#3f7fd8" stroke-width="80" stroke-linejoin="round"/>
+      <use xlink:href="#fold" fill="#94bcf2" stroke="#94bcf2" stroke-width="80" stroke-linejoin="round"/>
+      <use xlink:href="#lines" stroke="#fff" stroke-width="64" stroke-linecap="round"/>
+    </g>
+  </g>
+
+  <g transform="translate(410 330) rotate(7 240 280)">
+    <use xlink:href="#page" fill="#ec9334" stroke="#ec9334" stroke-width="80" stroke-linejoin="round"/>
+    <use xlink:href="#fold" fill="#f9c47e" stroke="#f9c47e" stroke-width="80" stroke-linejoin="round"/>
+    <use xlink:href="#lines" stroke="#fff" stroke-width="64" stroke-linecap="round"/>
+  </g>
+</svg>
