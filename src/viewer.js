@@ -8,6 +8,8 @@ import {
 } from "./page-layout.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "./vendor/pdfjs/pdf.worker.mjs";
+// JPEG 2000 / JBIG2 / color-profile decoders; without them scanned PDFs render blank.
+const WASM_URL = new URL("./vendor/pdfjs/wasm/", import.meta.url).href;
 
 const container = document.getElementById("viewer-container");
 const pagesWrapper = document.getElementById("pdf-pages");
@@ -610,7 +612,7 @@ export async function renderPdf(bytes) {
   pageModePreference = null;
   let loadingTask = null;
   try {
-    loadingTask = pdfjsLib.getDocument({ data: bytes });
+    loadingTask = pdfjsLib.getDocument({ data: bytes, wasmUrl: WASM_URL });
     pdfLoadingTask = loadingTask;
     const loadedDoc = await loadingTask.promise;
     if (token !== loadToken) {
