@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "tauri": "tauri",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:desktop": "node scripts/build.mjs desktop",
+    "build:android": "node scripts/build.mjs android"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
