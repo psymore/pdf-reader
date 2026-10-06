@@ -520,6 +520,7 @@ async function loadPageMetadata() {
         const viewport = page.getViewport({ scale: 1 });
         return {
           pageNumber,
+          proxy: page,
           width: viewport.width,
           height: viewport.height,
           slot: null,
@@ -583,6 +584,11 @@ function createObserver(generation) {
 
 function unloadPage(page) {
   cancelPageRender(page);
+  // PDF.js keeps a rendered page's decoded images and operator list on its
+  // cached page proxy until cleanup(), so without this every page ever viewed
+  // stays in memory (a scanned page with a high-res mask holds ~128 MB).
+  // A cancelled render still in flight is cleaned up once it settles.
+  page.proxy.cleanup();
   if (!page.canvas || !page.slot) return;
   page.canvas.width = 0;
   page.canvas.height = 0;

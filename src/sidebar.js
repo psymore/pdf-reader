@@ -228,6 +228,7 @@ function renderRow(entry) {
     </svg>`;
   removeBtn.addEventListener("click", async (event) => {
     event.stopPropagation();
+    if (!(await confirmRemove(entry.name))) return;
     await invoke("remove_recent_entry", { path: entry.path });
     await refresh();
   });
@@ -235,6 +236,20 @@ function renderRow(entry) {
   row.appendChild(actions);
 
   return row;
+}
+
+// Native dialog (tauri-plugin-dialog) rather than window.confirm, which the
+// Android WebView doesn't reliably show.
+async function confirmRemove(name) {
+  const message = `Remove "${name}" from the list?\nThe file itself is not deleted.`;
+  const ask = window.__TAURI__.dialog?.ask;
+  if (!ask) return window.confirm(message);
+  return ask(message, {
+    title: "Remove from list",
+    kind: "warning",
+    okLabel: "Remove",
+    cancelLabel: "Cancel",
+  });
 }
 
 async function copyText(text) {
