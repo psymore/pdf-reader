@@ -4,6 +4,7 @@ import { autoscrollSpeed, AUTOSCROLL_DEAD_ZONE } from "./autoscroll.js";
 import {
   computeFitZoom as fitZoomForPages,
   computeFitPageZoom as fitPageZoomForPage,
+  computeOutputScale,
   computePageColumns,
   currentPageFromPositions,
   resolveDualPageMode,
@@ -606,7 +607,7 @@ async function renderPage(page, generation) {
     if (generation !== renderGeneration || token !== page.renderToken) return;
 
     const viewport = pageProxy.getViewport({ scale: renderedZoom });
-    const outputScale = window.devicePixelRatio || 1;
+    const outputScale = computeOutputScale(viewport.width, viewport.height, window.devicePixelRatio || 1);
     const canvas = document.createElement("canvas");
     canvas.width = Math.floor(viewport.width * outputScale);
     canvas.height = Math.floor(viewport.height * outputScale);
